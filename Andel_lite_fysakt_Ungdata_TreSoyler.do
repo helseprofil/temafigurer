@@ -73,7 +73,7 @@ local geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Master
 *local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\TEST"
 
 *SKARP:
-local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\Fysakt_Ungdata2"
+local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\Fysakt_Ungdata"
 *===============================================================================
 
 * KJØRING:
