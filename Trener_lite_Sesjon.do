@@ -55,10 +55,10 @@ local geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Master
 *UTDATA, HUSK: Ikke i BIN-katalogen.
 
 *FOR TESTING:
-*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP\2021\Kommune\Temafigurer\TEST"
+local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP\2021\Kommune\Temafigurer\TEST"
 
 *SKARP:
-local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/FHP/`profilaar'/`geonivaa'\Temafigurer\Trening_sesjon"
+*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/FHP/`profilaar'/`geonivaa'\Temafigurer\Trening_sesjon"
 *===============================================================================
 
 * KJØRING:
@@ -201,8 +201,8 @@ cd "`targetkatalog'"
 *-----------------------------------------------------------------------
 
 **** Løkke gjennom alle rader
-*forvalues i=18/18 {
-forvalues i=1/`antall' {
+forvalues i=18/18 {
+*forvalues i=1/`antall' {
 *local i=1 //for testing av graf
 	//bygg filnavn fra kommunenummeret i rad x (subscripting)
 	local nummer =Sted_kode[`i']
