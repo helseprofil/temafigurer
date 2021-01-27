@@ -32,7 +32,7 @@
 library(tidyverse)
 # library(readr)
 # library(ggplot2)
-
+library(assertthat)
 #-------------------------------------------------------------------------------
 # Paths, inndata, utdata, predefinerte verdier
 ## Husk / i paths i R ...
@@ -65,9 +65,48 @@ if(geonivaa == "bydel") {
   indik_nr <- 24
 }
 
+          
+#-------------------------------------------------------------------------------
+          # Preppe data
+          ## TAB-separert, desimaltegn er komma. 
+          ## Det ligger "-" for manglende tall, så "Verdi_..."-kolonnene kan bli lest som character. Fikses med "na =".
+          ## Datotag_... leses som stort tall. Fikses med "col_types...".
+          datasett <- readr::read_tsv(inndatafil, 
+                                      col_names = TRUE, 
+                                      col_types = cols("Datotag_side4_innfilutfil" = col_character()), 
+                                      locale = locale(decimal_mark = ","), 
+                                      na = "-")
+          
+          # Subset, gamlemåten: Krymper datasettet trinnvis
+          datauttrekk <- datasett[datasett$LPnr == indik_nr, ]
+          datauttrekk <- datauttrekk[datauttrekk$SpraakId == "BOKMAAL", ]
+          
+          # Sjekk at det er riktig indikator
+          assertthat::assert_that(stringr::str_starts(datauttrekk$Indikator[1], "Lite fysisk aktive"))
+          
+          # Legge inn grupperingen i selve datasettet
+          datauttrekk$hjemmeby <- str_sub(datauttrekk$Sted_kode, start = 1, end = 2)
+          
+          # Få grafer for fire byer: Hardkodet løkkestyring. 
+          geokoder <- c(3,11,46,50)
+          
+          for (i in 1:3) {
+            by <- geokoder[i]
+            data <- datauttrekk[datauttrekk$hjemmeby == by, ]     # Ekstrahere de radene som matcher.
+            
+            # Denne grafen funker alene, men ikke som løkke?
+            # Ingen feilmelding, men jeg ser ingen plott.
+            ggplot(data, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
+              geom_col() +
+              labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) + 
+              annotate(geom = "text", x = Inf, y = Inf, vjust = "inward", hjust = "inward", 
+                       label = "Data fra Indikator.txt batchnr=")
+            
+          }
 
 #-------------------------------------------------------------------------------
-# Preppe data
+# Prøver å gjøre det samme med tidyverse-triksene:
+
 ## TAB-separert, desimaltegn er komma. 
 ## Det ligger "-" for manglende tall, så "Verdi_..."-kolonnene kan bli lest som character. Fikses med "na =".
 ## Datotag_... leses som stort tall. Fikses med "col_types...".
@@ -77,24 +116,20 @@ datasett <- readr::read_tsv(inndatafil,
                             locale = locale(decimal_mark = ","), 
                             na = "-")
 
-# Subset, gamlemåten: Krymper datasettet trinnvis
-datauttrekk <- datasett[datasett$LPnr == indik_nr, ]
-datauttrekk <- datauttrekk[datauttrekk$SpraakId == "BOKMAAL", ]
-
-# Sjekk at det er riktig indikator
-assertthat::assert_that(stringr::str_starts(datauttrekk$Indikator[1], "Lite fysisk aktive"))
-
-hjemmeby <- str_sub(datauttrekk$Sted_kode, start = 1, end = 2)
-
-#-------------------------------------------------------------------------------
-# Prøver å gjøre det samme med tidyverse-triksene:
-
 # Sjekke indikatorteksten: bare les ut en celle, styrt av indik_nr, uten å droppe noe.
   ## Er det da [[]] brukes, for å aksessere ett element?
+  ## Det var ikke så lett - jeg får ikke til siste linje, selve testen. 
+  ## Har prøvd med og uten map(), og med og uten ".$" for å få tak i kolonnen Indikator.
+  ## Bruke [[]] hadde ingen effekt.
+sjekk <- datasett %>% 
+  select(LPnr, Indikator) %>%
+  filter(LPnr == indik_nr) %>%
+  assert_that(str_starts(.$Indikator[1], "Lite fysisk aktive"))
+
 
 plotdata <- datasett %>%
   filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
-  mutate(hjemmeby = str_sub(datauttrekk$Sted_kode, start = 1, end = 2)) %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
   split(.$hjemmeby) %>%
   map(~ggplot(., mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
         geom_col() +
@@ -105,11 +140,3 @@ plotdata <- datasett %>%
 
 
 #-------------------------------------------------------------------------------
-# Grafkommando
-
-# Gamlemåten: Så ser jeg hva delene gjør
-ggplot(datauttrekk, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
-  geom_col() +
-  labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) + 
-  annotate(geom = "text", x = 10, y = 25, label = "datafil Indikator.txt")
-
