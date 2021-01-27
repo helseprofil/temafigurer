@@ -48,13 +48,13 @@ local Indik1tekst "Lite fysisk aktive"
 *-----------------
 * For UTVIKLING
 *local datakatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/`profilaar'/`geonivaa'\FigurOgTabell"
-local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/`geonivaa'\Flatfiler\FHP_2020"
 *local datafil "Indikator_ny.txt"
+local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/`geonivaa'\Flatfiler\FHP_2020"
 local datafil "Indikator.txt"
 	*/
 
 /* SKARP - Tar den som faktisk er lastet opp
-local datakatalog "F:\Prosjekter\Kommuneprofiler\Oppvekst\Importfiler\PROD/`geonivaa'\Flatfiler"
+local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/`geonivaa'\Flatfiler"
 local datafil "Indikator.txt"
 	*/
 
@@ -70,10 +70,10 @@ local geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Master
 *local ant_perioder=3
 
 *UTDATA, FOR TESTING:
-*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\TEST"
+local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\TEST"
 
 *SKARP:
-local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\Fysakt_Ungdata"
+*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\Fysakt_Ungdata"
 *===============================================================================
 
 * KJØRING:
@@ -133,7 +133,7 @@ merge 1:1 Sted_kode using "`geomaster'"
 //Her vil det være mye mismatch: Datafilen Indikator.txt har jo bare ett geonivå.
 //Må ta vare på nødvendige navn før mismatchene ryddes vekk.
 	*pause Etter merge geomaster
-	
+	*exit
 *------------------------------------------------------------------------
 
 **** SPLITT: Bydeler krever litt andre detaljer, men parallelt opplegg.
@@ -235,7 +235,7 @@ if `ymax' > 40 & `ymax' < 50 local ymax = 50 	//Setter runde tall
 if `ymax' > 80 & `ymax' < 100 local ymax = 100
 
 * OVERSTYRING: 2020 bedt om å sette alle y-akser til 100.
-local ymax = 100
+*local ymax = 100
 
 	di "ymax: " `ymax'
 	di "maxverdi: " `maxverdi'
@@ -259,7 +259,7 @@ if `ymin' > `minverdi' local ymin =`ymin'-2
 label var lands "Norge"
 *label var landslokaltilbud "Norge"
 
-local yaksetekst "Andel (prosent), standardisert"
+local yaksetekst "Andel (prosent, standardisert)"
 *local loktilbudtekst "Treffsteder"
 	*local yaksetekst "{bf:Vaksinasjonsdekning (prosent)}"  //Bold
 
@@ -268,7 +268,7 @@ local batchnummer = datotag_side4_innfilutfil
 local inndata = "`Indik1tekst' (Ungd), `datafil'" + ", batch `batchnummer'"
 
 * Dummyvariabel for å dele opp figuren i grupper
-gen dummy=.
+*gen dummy=.
 
 cd "`targetkatalog'"
 
@@ -282,17 +282,17 @@ cd "`targetkatalog'"
 *-----------------------------------------------------------------------
 
 * Fargekoder for søylene
-local kommfarge "9 117 181"		//mellomblå - koder ihht 2020-palett fra Heidi Grotle
-local fylkesfarge  "112 163 0"	//grønn
-local landsfarge "57 60 97"		//mørk blå
+local kommfarge "57 60 97"		//mørk blå
+local fylkesfarge "9 117 181"	//mellomblå - koder ihht 2020-palett fra Heidi Grotle
+local landsfarge "112 163 0"	//grønn
 
 	/*	local kommfarge "57 60 97"		//mørk blå - 2020 FHP-palett
 		local fylkesfarge "56 188 215"	//lys blå/turkis
 		local landsfarge "152 179 39"	//grønn
 	*/
 **** Løkke gjennom alle rader ==================================================
-*	forvalues i = 25/25 {
-forvalues i=1/`antall' {
+	forvalues i = 25/25 {
+*forvalues i=1/`antall' {
 *local i=5 //for testing av graf
 	//bygg filnavn fra kommunenummeret i rad x (subscripting)
 	local nummer = Sted_kode[`i']
@@ -384,7 +384,7 @@ forvalues i=1/`antall' {
 		blabel(bar, format(%04.1g) size(medium)) /// Viser bar-høyden på hver søyle
 		///yscale(range(`ymax') noextend) ylabel(0 10 20 30 40 50 60 70 75, angle(horizontal) labsize(medium) glcolor(gs12)) ///
 		/// yscale(range(100) noextend) ylabel(0 10 20 30 40 50 60 70 80 90 100, angle(horizontal) labsize(medium) glcolor(gs12)) ///
-		yscale(range(`ymax') /*noextend*/) ylabel(0 (10) `ymax', angle(horizontal) labsize(medium) glcolor(gs12)) ///
+		yscale(range(`ymax') /*noextend*/) ylabel(0 (5) `ymax', angle(horizontal) labsize(medium) glcolor(gs12)) ///
 		ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
 		///subtitle("`yaksetekst'", size(large) position(9) ring(0.5) orientation(vertical)) /// For komb. med lang 75-label på aksen
 	/*	legend(order(1 2 3) rows(1) ring(4) label(1 "`geonavn'") label(2 "`fylkenavn'") label(3 "Hele landet"), ) */ /// Blir lave og avlange fargemerker
