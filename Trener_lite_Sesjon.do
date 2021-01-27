@@ -8,6 +8,7 @@ Spec:
 	År "2018_2019" (er eneste).
 	Kjonn == 0 ?
 	Søyler Kommune-Fylke-Land (Bydel-Kommune-Land)
+	Måltall: meis
 	Prosenttall vises på søylene
 
 Figur nr 5 (midten s.3)
@@ -54,10 +55,10 @@ local geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Master
 *UTDATA, HUSK: Ikke i BIN-katalogen.
 
 *FOR TESTING:
-local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP\2021\Kommune\Temafigurer\TEST"
+*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP\2021\Kommune\Temafigurer\TEST"
 
 *SKARP:
-*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/FHP/`profilaar'/`geonivaa'\Temafigurer\Trening_sesjon"
+local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/FHP/`profilaar'/`geonivaa'\Temafigurer\Trening_sesjon"
 *===============================================================================
 
 * KJØRING:
@@ -71,7 +72,7 @@ local aarmax = word(`"`alleaar'"', -1) //siste ord i den sorterte rekka.
 keep if aar==`"`aarmax'"'
 keep if kjonn == 0
 *keep if type_valg == "KOMMUNEVALG"
-keep geo aar rate
+keep geo aar meis
 
 	
 ****Merge på geo-navn fra masterfil
@@ -95,7 +96,7 @@ if "`geonivaa'" == "kommune" | "`geonivaa'" == "fylke" {
 	gen hjemmefylke =int(geo/100) //nærmeste integer ved trunkering
 	replace hjemmefylke =geo if geo<=54 //Fylkene selv
 
-	gen fylkestall =rate if geo<=54
+	gen fylkestall =meis if geo<=54
 	sort hjemmefylke geo //sikrer at selve fylket kommer først
 	replace fylkestall = fylkestall[_n-1] if fylkestall==.
 		//Nå fikk Oslo verdi både for fylke og kommune
@@ -119,7 +120,7 @@ else if "`geonivaa'" == "bydel" {
 	gen hjemmefylke =int(geo/100) //nærmeste integer ved trunkering
 	replace hjemmefylke =geo if geo==301 | geo==1103 | geo==4601 | geo==5001 //Storbyene selv
 
-	gen fylkestall =rate if geo<=5444 //Lagrer KOMMUNEtallet
+	gen fylkestall =meis if geo<=5444 //Lagrer KOMMUNEtallet
 	sort hjemmefylke geo //sikrer at selve storbyene kommer først. Kommunetallet fylles ut for bydelene:
 	replace fylkestall = fylkestall[_n-1] if fylkestall==.
 
@@ -149,7 +150,7 @@ else {
 
 ****Lage ny variabel med bare landstallet
 sort geo
-gen landstall =rate[1]
+gen landstall =meis[1]
 drop in 1		//Nå trenger vi ikke raden for landet lenger.
 
 ****Tell rader - skal være lik antall kommuner/fylker
@@ -161,7 +162,7 @@ gen radnr =_n	//løkkestyring
 	/* VURDER: Dersom dette avsnittet plasseres foran der jeg renser vekk uvedkommende geo-nivå,
 	   vil alle profiltyper (fylke, kommune og bydel) få samme y-akse i samme år.
 	   Står avsnittet etter nivå-rensing, vil geonivåene få hver sin lengde på y-aksen.*/
-quietly summarize rate
+quietly summarize meis
 local maxverdi =r(max)
 local ymax =round(`maxverdi', 5) //Runder av til nærmeste 5-tall. SEES I SMNHENG med gridlines i grafen.
 if `ymax' < `maxverdi' local ymax = `maxverdi'+0.5 
@@ -173,7 +174,7 @@ local ymax = ceil(`ymax') 		//Runder oppover til nærmeste heltall
 	di "maxverdi: " `maxverdi'
 		
 *Ymin: 
-quietly summarize rate 
+quietly summarize meis 
 local minverdi =r(min)
 local ymin =round(`minverdi'-2, 2)	//Legger litt buffer under, for at søylen alltid 
 									//skal ha en viss lengde, og Runder av til nærmeste 2-tall. 
@@ -185,11 +186,11 @@ if `ymin' > `minverdi' local ymin =`ymin'-2
 	di "ymin: " `ymin'
 
 ****Label på ting -> lesbar Legend automatisk
-label var rate "Kommune"			//I grafen overstyres med aktuelt geonavn.
+label var meis "Kommune"			//I grafen overstyres med aktuelt geonavn.
 label var fylkestall "Fylke"		//Ditto.
 label var landstall "Norge"
 
-local yaksetekst "Trener sjeldnere enn ukentlig (prosent)"
+local yaksetekst "Andel (prosent, standardisert)"
 *local yaksetekst "{bf:Valgdeltakelse (prosent)}"  //Bold
 *local xaksetekst "Målsetting: 75 % vaksinasjonsdekning."
 
@@ -200,8 +201,8 @@ cd "`targetkatalog'"
 *-----------------------------------------------------------------------
 
 **** Løkke gjennom alle rader
-forvalues i=19/19 {
-*forvalues i=1/`antall' {
+*forvalues i=18/18 {
+forvalues i=1/`antall' {
 *local i=1 //for testing av graf
 	//bygg filnavn fra kommunenummeret i rad x (subscripting)
 	local nummer =Sted_kode[`i']
@@ -223,11 +224,11 @@ forvalues i=19/19 {
 	local stjernesymbol=ustrunescape("\u25CF") //Unicode hex-kode 25CF er fylt svart sirkel
 	
 	if "`geonivaa'"=="kommune" | "`geonivaa'"=="bydel" {	
-		if rate[`i']==. {
+		if meis[`i']==. {
 			local A_stjerne="`stjernesymbol'"
 			local anontekst  =`"`stjernesymbol' Manglende eller" "   utilstrekkelig tallgrunnlag"'
 		} //end -var. A-
-	/*	if <rate var.B>[`i']==. {
+	/*	if <meis var.B>[`i']==. {
 			local B_stjerne="`stjernesymbol'"
 			local anontekst  =`"`stjernesymbol' Manglende eller" "   utilstrekkelig tallgrunnlag"'
 		} //end -var. B- */
@@ -235,7 +236,7 @@ forvalues i=19/19 {
 			local fylkesA_stj = "`stjernesymbol'"
 			local anontekst  =`"`stjernesymbol' Manglende eller" "   utilstrekkelig tallgrunnlag"'
 		} //end -fylkes var.A-
-	/*	if fylkes<rate var.B>[`i']==. {
+	/*	if fylkes<meis var.B>[`i']==. {
 			local fylkesB_stj = "`stjernesymbol'"
 			local anontekst  =`"`stjernesymbol' Manglende eller" "   utilstrekkelig tallgrunnlag"'
 		} //end -fylkes var.B-  */
@@ -247,7 +248,7 @@ forvalues i=19/19 {
 			local fylkesA_stj="`stjernesymbol'"
 			local anontekst  =`"`stjernesymbol' Manglende eller" "   utilstrekkelig tallgrunnlag"'
 		} //end -fylkes var.A-
-	/*	if fylkes<rate var.B>[`i']==. {
+	/*	if fylkes<meis var.B>[`i']==. {
 			local fylkesB_stj="`stjernesymbol'"
 			local anontekst  =`"`stjernesymbol' Manglende eller" "   utilstrekkelig tallgrunnlag"'
 		} //end -fylkes var.B- */  
@@ -269,8 +270,8 @@ forvalues i=19/19 {
 
 	//Sette fargekoder
 	local kommfarge "57 60 97"		//mørk blå
-	local fylkesfarge "56 188 215"	//lys blå/turkis
-	local landsfarge "152 179 39"	//grønn
+	local fylkesfarge "9 117 181"	//mellomblå/turkis
+	local landsfarge "112 163 0"	//dus grønn
 
 			* 2018-farger:
 			*	local kommfarge 	"0 153 0"		//grønn
@@ -279,7 +280,7 @@ forvalues i=19/19 {
 	
 	*Kommuner	
 	if "`geonivaa'"=="kommune" | "`geonivaa'"=="bydel" {
-	graph bar (asis) rate fylkestall landstall  if radnr ==`i', ///
+	graph bar (asis) meis fylkestall landstall  if radnr ==`i', ///
 		graphregion(fcolor(white) lcolor(white) ilcolor(white)) ///
 		plotregion(fcolor(white) margin(zero)) ///
 /*		outergap(100) bargap(100) bar(1, color("0 153 0")) bar(2, color("234 153 6")) bar(3, color("67 103 189")) */ ///
