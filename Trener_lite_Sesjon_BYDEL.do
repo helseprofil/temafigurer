@@ -1,5 +1,6 @@
 * TEMAFIGUR 2021: TRENER MINDRE ENN UKENTLIG, SESJONSDATA
-* 
+* SPESIALVERSJON for Bydel: Viser bare kommune- og landstall.
+*
 *		OBS VED GJENBRUK: Ny mappestruktur for produktene ifm OVP sep-2020.
 *
 /* 	Utgangspunkt: Valgdeltakelse 2020
@@ -34,7 +35,8 @@ pause on
 *-----------------------------------------------------------------
 local modus = "TEST" 	//Tillatt: TEST, SKARP  - styrer både utdata og løkke for én eller alle grafer.
 local profilaar ="2021"
-local geonivaa ="kommune" //Tillatte verdier: "kommune". Vet ikke "fylke" ennå. BRUKES IKKE i "bydel".
+* Tilpasser FYLKE-bitene til å vise kommune- og landstall, for bydelsprofiler.
+local geonivaa ="fylke" //Tillatte verdier: "kommune". Vet ikke "fylke" ennå. Bydelstall finnes ikke, må bruke kommunegraf.
 local fig_nr =5			//Bestemmer hvor på sidene figuren skal stå.
 						//s.2 -> fig.1-2-3, s.3 -> fig.4-5-6.
 						//OBS: ER UAVHENGIG AV figurens nummer i profilteksten!
@@ -58,7 +60,7 @@ if "`modus'" == "TEST" {
 	local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP\2021\Kommune\Temafigurer\TEST"
 }
 *else local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/FHP/`profilaar'/`geonivaa'\Temafigurer\Trening_sesjon"
-else local targetkatalog "C:\Users\stbj\Documents\1-FHI\Mellomlager" //Hjemme går det mye fortere å skrive til C:.
+else local targetkatalog "C:\Users\stbj\Documents\1-FHI\Mellomlager" //Hjemme går det mye fortere å skrive til C: og kopiere etterpå.
 
 *===============================================================================
 
@@ -86,7 +88,7 @@ drop if _merge == 2					//Helseregioner og bydeler finnes ikke i dataene
 	***************************/
 	
 *------------------------------------------------------------------------
-****For skalering av y-aksen: (FOR INFLUENSA: OVERSTYRES ETTERPÅ ...)
+****For skalering av y-aksen: (KAN OVERSTYRES ETTERPÅ ...)
 	/* VURDER: Dersom dette avsnittet plasseres foran der jeg renser vekk uvedkommende geo-nivå,
 	   vil alle profiltyper (fylke, kommune og bydel) få samme y-akse i samme år.
 	   Står avsnittet etter nivå-rensing, vil geonivåene få hver sin lengde på y-aksen.*/
@@ -118,8 +120,9 @@ local ymin =0
 if "`geonivaa'" == "kommune" | "`geonivaa'" == "fylke" {
 
  	**** Drop lavere geonivåer
-	if "`geonivaa'" == "fylke" drop if geo>54 //Dropper også evt. HReg.
-	if "`geonivaa'" == "kommune" drop if geo>30000
+	*if "`geonivaa'" == "fylke" drop if geo>54 //Dropper også evt. HReg.
+	*if "`geonivaa'" == "kommune" drop if geo>30000
+	drop if geo>30000
 
 	****Lage variabler med fylkestallene
 	gen hjemmefylke =int(geo/100) //nærmeste integer ved trunkering
@@ -163,6 +166,8 @@ else if "`geonivaa'" == "bydel" {
 } //FERDIG IF BYDEL
 
 ****   Velge ut aktuelt geo-nivå
+drop if geo<100 & geo!=0
+/*
 if "`geonivaa'"=="kommune" { //Bydeler ble droppet ovenfor.
 	drop if geo<100 & geo!=0
 	}
@@ -176,11 +181,13 @@ else {
 	di "Skriv inn gyldig geo-nivå i scriptet"
 	exit
 	}
-
+*/
 ****Lage ny variabel med bare landstallet
 sort geo
 gen landstall =meis[1]
 drop in 1		//Nå trenger vi ikke raden for landet lenger.
+
+keep if inlist(geo, 301, 1103, 4601, 5001)	//Beholder bare storbyene
 
 ****Tell rader - skal være lik antall kommuner/fylker
 quietly describe	//BYDELER: Storbyene ligger igjen, men de hoppes over i selve graf-løkka.
@@ -192,7 +199,7 @@ label var meis "Kommune"			//I grafen overstyres med aktuelt geonavn.
 label var fylkestall "Fylke"		//Ditto.
 label var landstall "Norge"
 
-local yaksetekst "Andel (prosent), standardisert"
+local yaksetekst "Andel (prosent, standardisert)"
 *local yaksetekst "{bf:Valgdeltakelse (prosent)}"  //Bold
 *local xaksetekst "Målsetting: 75 % vaksinasjonsdekning."
 
@@ -204,7 +211,7 @@ cd "`targetkatalog'"
 
 **** Løkke gjennom alle rader
 if "`modus'" == "TEST" {
-	local ifsetning = "i = 71/71"	//Lager én graf
+	local ifsetning = "i = 3/3"	//Lager én graf
 }
 else local ifsetning = "i = 1/`antall'"	//Kjører alt
 
@@ -264,7 +271,7 @@ forvalues `ifsetning' {
 	//Dimensjonere plassering av tekster
 	local avstand= `ymax'/25 			//Stedsnavnene avstand fra x-aksen
 	local batchnr_yplass = `ymax'/12 	//Kildefilnavnet i hjørnet, avstand fra x-aksen
-	local batchnr_Xplass = 98-(length("`inndata'")) //Kildefilnavnet i hjørnet, plass på x-aksen
+	local batchnr_Xplass = 95-(length("`inndata'")) //Kildefilnavnet i hjørnet, plass på x-aksen
 	local anontekst_Xplass = 2
 *	local anontekst_Xplass = 100-(length("`anontekst'")) //Forklarende tekstboks
 	local anontekst_Yplass = `ymax'-(`ymax'*0.04)
@@ -294,7 +301,7 @@ forvalues `ifsetning' {
 		blabel(bar, format(%3.0f) size(medium)) /// Viser bar-høyden på hver søyle
 		///yscale(range(`ymax') noextend) ylabel(0 10 20 30 40 50 60 70 75, angle(horizontal) labsize(medium) glcolor(gs12)) ///
 		///yscale(range(100) noextend) ylabel(0 10 20 30 40 50 60 70 80 90 100, angle(horizontal) labsize(medium) glcolor(gs12)) ///
-		yscale(range(`ymax') noextend) ylabel(0 (10) `ymax', angle(horizontal) labsize(medium) glcolor(white)) ///
+		yscale(range(`ymax') noextend) ylabel(0 (5) `ymax', angle(horizontal) labsize(medium) glcolor(gs12)) ///
 		ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
 		///subtitle("`yaksetekst'", size(large) position(9) ring(0.5) orientation(vertical)) /// For komb. med lang 75-label på aksen
 		legend(off) ///
@@ -310,20 +317,20 @@ forvalues `ifsetning' {
 		text(`anontekst_Yplass' `anontekst_Xplass' "`anontekst'", color(black) placement(e) justification(left)) ///
 		note(" " " ", size(vsmall) )
 	}	
-	*Fylker	
+	*Fylker	OBS Spesialtilpasset, viser kommune og land
 	else if "`geonivaa'"=="fylke" {
-	graph bar (asis) fylkestall landstall  if radnr ==`i', ///
-		graphregion(fcolor(white) lcolor(white) ilcolor(white)) ///
-		plotregion(fcolor(gs15) margin(zero)) ///
+	graph bar (asis) meis landstall  if radnr ==`i', ///
+		graphregion(fcolor(white) lcolor(white) ilcolor(white) margin(l = 18)) /// margin(left = 18 % av bildet) for å matche Hannas fig.
+		plotregion(fcolor(white) margin(zero)) ///
 /*		outergap(100) bargap(100) bar(1, color("234 153 6")) bar(2, color("67 103 189")) */ ///
-		outergap(100) bargap(100) bar(1, color("`fylkesfarge'")) bar(2, color("`landsfarge'"))  ///
+		outergap(100) bargap(100) bar(1, color("`kommfarge'")) bar(2, color("`landsfarge'"))  ///
 		blabel(bar, format(%3.0f) size(medium)) /// Viser bar-høyden på hver søyle
 		///yscale(range(`ymax') noextend) ylabel(0 10 20 30 40 50 60 70 80 90 100, angle(horizontal) labsize(medium) glcolor(gs12)) ///
-		yscale(range(`ymax') noextend) ylabel(0 (5) `ymax', angle(horizontal) labsize(medium) glcolor(gs12)) ///
+		yscale(range(`ymax') noextend) ylabel(0 (10) `ymax', angle(horizontal) labsize(medium) glcolor(white)) ///
 		ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
 		///subtitle("`yaksetekst'", size(large) position(9) ring(0.5) orientation(vertical)) ///
 		legend(off) ///
-		text(-`avstand' 30 "`fylkenavn'", size(medlarge))    ///
+		text(-`avstand' 30 "`geonavn'", size(medlarge))    ///
 		text(-`avstand' 70 "Hele landet", size(medlarge)) ///
 		text(-`batchnr_yplass' `batchnr_Xplass' "`inndata'", ///
 			placement(se) color(gs9) justification(left) size(vsmall)) ///

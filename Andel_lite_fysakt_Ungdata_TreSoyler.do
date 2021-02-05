@@ -22,6 +22,7 @@ pause on
 
 * REDIGER/SJEKK
 *-----------------------------------------------------------------
+local modus = "TEST" 	//Tillatt: TEST, SKARP  - styrer både utdata og løkke for én eller alle grafer.
 local profilaar = "2021"	//
 local geonivaa = "kommune" 	//Tillatte verdier: "kommune", "bydel".  Ungdata brukes ikke i "fylke".
 local fig_nr = 4		//Bestemmer hvor på sidene figuren skal stå.
@@ -30,11 +31,11 @@ local fig_nr = 4		//Bestemmer hvor på sidene figuren skal stå.
 
 *Indikatorenes nummer i tabellen - se tabell FRISKVIK. DUMMY per 19.1.21
 if "`geonivaa'" == "kommune" {
-	local Indik1 = 24		// DUMMY
+	local Indik1 = 22		// Faktisk
 	*local loktilbud=18
 } // fra Ungdata - for KOMMUNER
 else if "`geonivaa'" == "bydel" {
-	local Indik1 = 19		// DUMMY
+	local Indik1 = 18		// Faktisk
 	*local loktilbud=18
 } // fra Ungdata - for BYDEL 
 else if "`geonivaa'" == "fylke" {
@@ -46,14 +47,14 @@ local Indik1tekst "Lite fysisk aktive"
 						
 *INNDATA: 
 *-----------------
-* For UTVIKLING
+/* For UTVIKLING
 *local datakatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/`profilaar'/`geonivaa'\FigurOgTabell"
 *local datafil "Indikator_ny.txt"
 local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/`geonivaa'\Flatfiler\FHP_2020"
 local datafil "Indikator.txt"
 	*/
 
-/* SKARP - Tar den som faktisk er lastet opp
+* SKARP - Tar den som faktisk er lastet opp
 local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/`geonivaa'\Flatfiler"
 local datafil "Indikator.txt"
 	*/
@@ -70,10 +71,12 @@ local geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Master
 *local ant_perioder=3
 
 *UTDATA, FOR TESTING:
-local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\TEST"
+if "`modus'" == "TEST" {
+	local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\TEST"
+}
+*else local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\Fysakt_Ungdata"
+else local targetkatalog "C:\Users\stbj\Documents\1-FHI\Mellomlager" //Hjemme går det mye fortere å skrive til C:.
 
-*SKARP:
-*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer\FHP/`profilaar'/`geonivaa'\Temafigurer\Fysakt_Ungdata"
 *===============================================================================
 
 * KJØRING:
@@ -135,7 +138,40 @@ merge 1:1 Sted_kode using "`geomaster'"
 	*pause Etter merge geomaster
 	*exit
 *------------------------------------------------------------------------
+****For skalering av y-aksen: 
+	/* VURDER: Dersom dette avsnittet plasseres foran der jeg renser vekk uvedkommende geo-nivå,
+	   vil alle profiltyper (fylke, kommune og bydel) få samme y-akse i samme år.
+	   Står avsnittet etter nivå-rensing, vil geonivåene få hver sin lengde på y-aksen.*/
+* Lokaltilbud var både høyeste og laveste verdi.	   
+if "`geonivaa'"!="fylke" quietly summarize meis	
+else quietly summarize fylkes
+local maxverdi =r(max)
+local ymax =round(`maxverdi', 5) //Runder av til nærmeste 5-tall. SEES I SMNHENG med gridlines i grafen.
+if `ymax' < `maxverdi' local ymax = `ymax' + 5 //Da ble den rundet nedover, så vi må ta neste gridline-trinn.
+local ymax = round(ceil(`ymax'), 10) 		//Runder oppover til nærmeste heltall, og deretter til nærmeste 10-er.
+if `ymax' > 40 & `ymax' < 50 local ymax = 50 	//Setter runde tall
+if `ymax' > 80 & `ymax' < 100 local ymax = 100
 
+* OVERSTYRING: Vanlig at folk ønsker bestemt oppsett.
+local ymax = 75
+
+	di "ymax: " `ymax'
+	di "maxverdi: " `maxverdi'
+		
+*Ymin: 
+if "`geonivaa'"!="fylke" quietly summarize meis
+else quietly summarize fylkes
+local minverdi =r(min)
+local ymin =round(`minverdi'-2, 2)	//Legger litt buffer under, for at søylen alltid 
+									//skal ha en viss lengde, og Runder av til nærmeste 2-tall. 
+									//SEES I SMNHENG med gridlines i grafen.
+if `ymin' > `minverdi' local ymin =`ymin'-2
+
+*Eller, hvis ymin viser seg å bli énsifret: Penere å starte på null.
+local ymin =0
+	di "ymin: " `ymin'
+*pause
+*-------------------------------------------------------------------------------
 **** SPLITT: Bydeler krever litt andre detaljer, men parallelt opplegg.
 *    Noe her er unødv (f.eks. geo-rensing), men beholder det en bloc.
 if "`geonivaa'" == "kommune" | "`geonivaa'" == "fylke" {
@@ -220,46 +256,13 @@ local antall=r(N)
 gen radnr =_n	//løkkestyring
 	*pause Sjekk indik, hvilken er høyest/lavest?
 	
-****For skalering av y-aksen: 
-	/* VURDER: Dersom dette avsnittet plasseres foran der jeg renser vekk uvedkommende geo-nivå,
-	   vil alle profiltyper (fylke, kommune og bydel) få samme y-akse i samme år.
-	   Står avsnittet etter nivå-rensing, vil geonivåene få hver sin lengde på y-aksen.*/
-* Lokaltilbud var både høyeste og laveste verdi.	   
-if "`geonivaa'"!="fylke" quietly summarize meis	
-else quietly summarize fylkes
-local maxverdi =r(max)
-local ymax =round(`maxverdi', 5) //Runder av til nærmeste 5-tall. SEES I SMNHENG med gridlines i grafen.
-if `ymax' < `maxverdi' local ymax = `ymax' + 5 //Da ble den rundet nedover, så vi må ta neste gridline-trinn.
-local ymax = round(ceil(`ymax'), 10) 		//Runder oppover til nærmeste heltall, og deretter til nærmeste 10-er.
-if `ymax' > 40 & `ymax' < 50 local ymax = 50 	//Setter runde tall
-if `ymax' > 80 & `ymax' < 100 local ymax = 100
-
-* OVERSTYRING: 2020 bedt om å sette alle y-akser til 100.
-*local ymax = 100
-
-	di "ymax: " `ymax'
-	di "maxverdi: " `maxverdi'
-		
-*Ymin: 
-if "`geonivaa'"!="fylke" quietly summarize meis
-else quietly summarize fylkes
-local minverdi =r(min)
-local ymin =round(`minverdi'-2, 2)	//Legger litt buffer under, for at søylen alltid 
-									//skal ha en viss lengde, og Runder av til nærmeste 2-tall. 
-									//SEES I SMNHENG med gridlines i grafen.
-if `ymin' > `minverdi' local ymin =`ymin'-2
-
-*Eller, hvis ymin viser seg å bli énsifret: Penere å starte på null.
-*local ymin =0
-	di "ymin: " `ymin'
-
 ****Label på ting -> lesbar Legend automatisk
 *label var skjermtidmeis "Kommune"			//I grafen overstyres med aktuelt geonavn.
 *label var fylkesskjermtid "Fylke"		//Ditto.
 label var lands "Norge"
 *label var landslokaltilbud "Norge"
 
-local yaksetekst "Andel (prosent, standardisert)"
+local yaksetekst "Andel (prosent), standardisert"
 *local loktilbudtekst "Treffsteder"
 	*local yaksetekst "{bf:Vaksinasjonsdekning (prosent)}"  //Bold
 
@@ -291,8 +294,12 @@ local landsfarge "112 163 0"	//grønn
 		local landsfarge "152 179 39"	//grønn
 	*/
 **** Løkke gjennom alle rader ==================================================
-	forvalues i = 25/25 {
-*forvalues i=1/`antall' {
+if "`modus'" == "TEST" {
+	local ifsetning = "i = 125/125"	//Lager én graf
+}
+else local ifsetning = "i = 1/`antall'"	//Kjører alt
+
+forvalues `ifsetning' {
 *local i=5 //for testing av graf
 	//bygg filnavn fra kommunenummeret i rad x (subscripting)
 	local nummer = Sted_kode[`i']
@@ -384,7 +391,7 @@ local landsfarge "112 163 0"	//grønn
 		blabel(bar, format(%04.1g) size(medium)) /// Viser bar-høyden på hver søyle
 		///yscale(range(`ymax') noextend) ylabel(0 10 20 30 40 50 60 70 75, angle(horizontal) labsize(medium) glcolor(gs12)) ///
 		/// yscale(range(100) noextend) ylabel(0 10 20 30 40 50 60 70 80 90 100, angle(horizontal) labsize(medium) glcolor(gs12)) ///
-		yscale(range(`ymax') /*noextend*/) ylabel(0 (5) `ymax', angle(horizontal) labsize(medium) glcolor(gs12)) ///
+		yscale(range(`ymax') /*noextend*/) ylabel(0 (10) `ymax', angle(horizontal) labsize(medium) glcolor(white)) ///
 		ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
 		///subtitle("`yaksetekst'", size(large) position(9) ring(0.5) orientation(vertical)) /// For komb. med lang 75-label på aksen
 	/*	legend(order(1 2 3) rows(1) ring(4) label(1 "`geonavn'") label(2 "`fylkenavn'") label(3 "Hele landet"), ) */ /// Blir lave og avlange fargemerker
