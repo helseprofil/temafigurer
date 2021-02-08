@@ -1,6 +1,6 @@
 /*	TEMAFIGUR FOLKEHELSEPROFIL-2021: ANDEL SOM ER LITE FYSISK AKTIVE (Ungdata)
 	- søylediagram med kommune, fylke og land for det siste av de årene kommunen 
-	  har tall i løpet av perioden 2018-2020. 
+	  har tall i løpet av perioden 2017-2020.  OBS fire år - spes pga koronanedstengningen
 
 *		OBS VED GJENBRUK: Ny mappestruktur for produktene ifm OVP sep-2020.
 *
@@ -14,6 +14,8 @@
 	07.09.20 OBS: Vi la inn dobbeltstjerne ist.f. kommunetallet, for å markere spesielt 
 	de geo som ikke hadde Ungdata-tall med en egen fotnote. Da kræsjet "generate" i 
 	måltall-håndteringen, så alle kommuner fikk missing ...! Se ca. linje 100.
+	
+	
 */
 *===============================================================================
 set more off
@@ -101,7 +103,7 @@ assert regexm(indikator, "`Indik1tekst'")
 	//Må altså reshape etter LPnr og rename
 	//Men først prepper jeg de tre tallvariablene, de er tekst i innfilen.
 
-keep sted_kode omraade_kode lpnr verdi_lavestegeonivaa verdi_mellomgeonivaa verdi_referansenivaa ///
+keep sted_kode omraade_kode lpnr indikator verdi_lavestegeonivaa verdi_mellomgeonivaa verdi_referansenivaa ///
 	datotag_side4_innfilutfil
 rename sted_kode Sted_kode
 	*pause
@@ -131,6 +133,10 @@ drop verdi*
 		*/
 *Nå har vi tre tallvariabler - meis, fylkes og lands.
 	
+*Få tak i årstallet for Ungdata-gjennomføringen, til tekst i figuren
+gen Ungd_aar = word(indikator, -1)
+drop indikator
+
 ****Merge på geo-navn fra masterfil
 merge 1:1 Sted_kode using "`geomaster'"
 //Her vil det være mye mismatch: Datafilen Indikator.txt har jo bare ett geonivå.
@@ -295,7 +301,7 @@ local landsfarge "112 163 0"	//grønn
 	*/
 **** Løkke gjennom alle rader ==================================================
 if "`modus'" == "TEST" {
-	local ifsetning = "i = 125/125"	//Lager én graf
+	local ifsetning = "i = 238/238"	//Lager én graf
 }
 else local ifsetning = "i = 1/`antall'"	//Kjører alt
 
@@ -311,6 +317,13 @@ forvalues `ifsetning' {
 	local fylkenavn = fylkesnavn[`i']
 *di "Fylke: `fylkenavn'"
 *pause	
+
+	//Finn Ungdata-året, til figurtekst. 
+	local Ungd_aar = Ungd_aar[`i']
+	local Ungd_tekst = "Ungdata `Ungd_aar'"
+*di "Ungd_aar: `Ungd_aar'"
+*pause	
+
 	//Forberede merking av evt. missing søyler
 	local Indik1stjerne = "" //Nullstiller før testen for denne kommunen
 *	local loktilbudstjerne=""
@@ -365,6 +378,8 @@ forvalues `ifsetning' {
 	local fylkesInd1stj_Xpl  = 50
 *	local fylkestilbudstj_Xpl  = 75
 	local stjerne_Yplass = `ymax'*0.05
+	local Ungd_tekst_Xplass = 100
+	local Ungd_tekst_yplass = `anontekst_Yplass'
 	
 		/*Feilsøking
 		macro list
@@ -406,6 +421,7 @@ forvalues `ifsetning' {
 		text(`stjerne_Yplass' `fylkesInd1stj_Xpl' "`fylkesInd1stj'", size(vlarge))	///
 	/*	text(`stjerne_Yplass' `fylkestilbudstj_Xpl' "`fylkestilbudstj'", size(vlarge))	*/ ///
 		text(`anontekst_Yplass' `anontekst_Xplass' "`anontekst'", color(black) placement(e) justification(left)) ///
+		text(`Ungd_tekst_yplass' `Ungd_tekst_Xplass' "`Ungd_tekst'", color(gs12) placement(nw) justification(left)) ///
 		note(" " " ", size(vsmall) )
 	}	
 	*Fylker	

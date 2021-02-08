@@ -1,5 +1,5 @@
 * TEMAFIGUR 2021: TRENER MINDRE ENN UKENTLIG, SESJONSDATA
-* SPESIALVERSJON for Bydel: Viser bare kommune- og landstall.
+* SPESIALVERSJON for Bydel: Viser K-F-L for de tre andre, men bare kommune- og landstall for Oslo.
 *
 *		OBS VED GJENBRUK: Ny mappestruktur for produktene ifm OVP sep-2020.
 *
@@ -36,7 +36,7 @@ pause on
 local modus = "TEST" 	//Tillatt: TEST, SKARP  - styrer både utdata og løkke for én eller alle grafer.
 local profilaar ="2021"
 * Tilpasser FYLKE-bitene til å vise kommune- og landstall, for bydelsprofiler.
-local geonivaa ="fylke" //Tillatte verdier: "kommune". Vet ikke "fylke" ennå. Bydelstall finnes ikke, må bruke kommunegraf.
+local geonivaa ="fylke" //SPESIALVERSJON for bydelene
 local fig_nr =5			//Bestemmer hvor på sidene figuren skal stå.
 						//s.2 -> fig.1-2-3, s.3 -> fig.4-5-6.
 						//OBS: ER UAVHENGIG AV figurens nummer i profilteksten!
@@ -275,11 +275,21 @@ forvalues `ifsetning' {
 	local anontekst_Xplass = 2
 *	local anontekst_Xplass = 100-(length("`anontekst'")) //Forklarende tekstboks
 	local anontekst_Yplass = `ymax'-(`ymax'*0.04)
-	local A_stjerne_Xplass = 21
-*	local B_stjerne_Xplass = 61
-	local fylkesA_stj_Xpl  = 50
-*	local fylkesB_stj_Xpl  = 75
-	local stjerne_Yplass = `ymax'*0.05
+	
+	if `i'== 1 {	//Oslo: bare to søyler
+		local A_stjerne_Xplass = 21
+	*	local B_stjerne_Xplass = 61
+		local fylkesA_stj_Xpl  = 50
+	*	local fylkesB_stj_Xpl  = 75
+		local stjerne_Yplass = `ymax'*0.05
+	}
+	else {		//De tre andre: Tre søyler K-F-L - MEN dette slår ikke inn! Ikke finjustert.
+		local A_stjerne_Xplass = 21
+	*	local B_stjerne_Xplass = 61
+		local fylkesA_stj_Xpl  = 50
+	*	local fylkesB_stj_Xpl  = 75
+		local stjerne_Yplass = `ymax'*0.05
+	}
 
 	//Sette fargekoder
 	local kommfarge "57 60 97"		//mørk blå
@@ -292,16 +302,17 @@ forvalues `ifsetning' {
 			*	local landsfarge 	"67 103 189" 	//blå
 	
 	*Kommuner	
-	if "`geonivaa'"=="kommune" | "`geonivaa'"=="bydel" {
+*	if "`geonivaa'"=="kommune" | "`geonivaa'"=="bydel" {
+	if inlist(`i', 2,3,4) {		//De andre byene: Plotte tre søyler
 	graph bar (asis) meis fylkestall landstall  if radnr ==`i', ///
-		graphregion(fcolor(white) lcolor(white) ilcolor(white)) ///
+		graphregion(fcolor(white) lcolor(white) ilcolor(white) margin(l = 11)) /// margin: se nedenfor
 		plotregion(fcolor(white) margin(zero)) ///
 /*		outergap(100) bargap(100) bar(1, color("0 153 0")) bar(2, color("234 153 6")) bar(3, color("67 103 189")) */ ///
 		outergap(100) bargap(100) bar(1, color("`kommfarge'")) bar(2, color("`fylkesfarge'")) bar(3, color("`landsfarge'")) ///
 		blabel(bar, format(%3.0f) size(medium)) /// Viser bar-høyden på hver søyle
 		///yscale(range(`ymax') noextend) ylabel(0 10 20 30 40 50 60 70 75, angle(horizontal) labsize(medium) glcolor(gs12)) ///
 		///yscale(range(100) noextend) ylabel(0 10 20 30 40 50 60 70 80 90 100, angle(horizontal) labsize(medium) glcolor(gs12)) ///
-		yscale(range(`ymax') noextend) ylabel(0 (5) `ymax', angle(horizontal) labsize(medium) glcolor(gs12)) ///
+		yscale(range(`ymax') noextend) ylabel(0 (10) `ymax', angle(horizontal) labsize(medium) glcolor(white)) ///
 		ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
 		///subtitle("`yaksetekst'", size(large) position(9) ring(0.5) orientation(vertical)) /// For komb. med lang 75-label på aksen
 		legend(off) ///
@@ -318,9 +329,10 @@ forvalues `ifsetning' {
 		note(" " " ", size(vsmall) )
 	}	
 	*Fylker	OBS Spesialtilpasset, viser kommune og land
-	else if "`geonivaa'"=="fylke" {
+*	else if "`geonivaa'"=="fylke" {
+	else if `i' == 1 {		//Oslo: Plotte to søyler
 	graph bar (asis) meis landstall  if radnr ==`i', ///
-		graphregion(fcolor(white) lcolor(white) ilcolor(white) margin(l = 18)) /// margin(left = 18 % av bildet) for å matche Hannas fig.
+		graphregion(fcolor(white) lcolor(white) ilcolor(white) margin(l = 11)) /// margin(left = 11 % av bildet) for å matche Hannas fig.
 		plotregion(fcolor(white) margin(zero)) ///
 /*		outergap(100) bargap(100) bar(1, color("234 153 6")) bar(2, color("67 103 189")) */ ///
 		outergap(100) bargap(100) bar(1, color("`kommfarge'")) bar(2, color("`landsfarge'"))  ///
