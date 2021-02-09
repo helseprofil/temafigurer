@@ -133,8 +133,12 @@ drop verdi*
 		*/
 *Nå har vi tre tallvariabler - meis, fylkes og lands.
 	
-*Få tak i årstallet for Ungdata-gjennomføringen, til tekst i figuren
+	
+*Få tak i årstallet for Ungdata-gjennomføringen, til tekst i figuren.
+*For 2021: Overstyres med "2018-2020" hvis kommunen mangler tall - da vises jo bare de treårige F og L.
+*CAVE hvis årstallet fjernes fra Indikator.txt.
 gen Ungd_aar = word(indikator, -1)
+replace Ungd_aar = "2018-2020" if missing(meis)
 drop indikator
 
 ****Merge på geo-navn fra masterfil
@@ -301,7 +305,7 @@ local landsfarge "112 163 0"	//grønn
 	*/
 **** Løkke gjennom alle rader ==================================================
 if "`modus'" == "TEST" {
-	local ifsetning = "i = 238/238"	//Lager én graf
+	local ifsetning = "i = 247/247"	//Lager én graf
 }
 else local ifsetning = "i = 1/`antall'"	//Kjører alt
 
