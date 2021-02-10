@@ -82,13 +82,16 @@ Inndata-filnavnet (som har datotag) ligger som grå minitekst
 ## Jeg er i The tidyverse - install.packages("tidyverse") tar inn alt.
 library(tidyverse)
 library(knitr)
-library(assertthat)
+library(assertthat)     # Brukes i standard-R-chunken.
+library(assertr)
+
 ```
 
-```{r Paths inndata utdata og andre predefinerte verdier}
+```{r Paths-inndata-utdata-og-andre-predefinerte-verdier}
 geonivaa <- "bydel" # Tillatt: "bydel", "kommune"
 profilaar <- 2021
 pos <- 4            # Figurposisjon øverst s.3 - VERIFISÉR
+indikatortittel <- "Lite fysisk aktive"   # Sjekker om teksten starter med dette.
 
 result_root <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_"
 inndata_root <- "N:/Helseprofiler_Rapportgenerator/Folkehelseprofiler/Importfiler/PROD"
@@ -117,7 +120,8 @@ if(geonivaa == "bydel") {
  «geo» og «GEO», numerisk stedskode, (hadde kortversjon av navn som value label i Stata). 
 
 
-A) Prøver i Standard-R - kjøres ikke sammen med resten (eval=FALSE)
+
+# A) Prøver i Standard-R - kjøres ikke sammen med resten (eval=FALSE)
 ```{r Standard-R, eval=FALSE}
 # Preppe data
 ## TAB-separert, desimaltegn er komma. 
@@ -159,7 +163,8 @@ for (i in 1:4) {                                        # Løkke 1:4 for å få 
 
 ```
 
-B) Prøver å gjøre det samme med tidyverse-triksene:
+
+# B) Prøver å gjøre det samme med tidyverse-triksene:
 ```{r Data innlesing}
 ## TAB-separert, desimaltegn er komma. 
 ## Det ligger "-" for manglende tall, så "Verdi_..."-kolonnene kan bli lest som character. Fikses med "na =".
@@ -172,19 +177,40 @@ datasett <- readr::read_tsv(inndatafil,
 ```
 
 
-```{r Verifisere indikator, eval=FALSE}
+```{r Verifisere-indikator-med-Assertthat, eval=FALSE}
 # Sjekke indikatorteksten: bare les ut en celle, styrt av indik_nr, uten å droppe noe.
   ## Er det da [[]] brukes, for å aksessere ett element?
 
-  ## Det var ikke så lett - jeg får ikke til siste linje, selve testen. 
+  ## Det var ikke så lett - jeg får ikke til siste linje, selve testen med assert_that(). 
   ## Har prøvd med og uten map(), og med og uten ".$" for å få tak i kolonnen Indikator.
   ## Bruke [[]] hadde ingen effekt.
 sjekk <- datasett %>% 
   select(LPnr, Indikator) %>%
   filter(LPnr == indik_nr)  %>%
   assert_that(str_starts(.$Indikator[1], "Lite fysisk aktive"))
+  
 ```
 
+```{r Verifisere-indikator-med-Assertr, eval=TRUE}
+# Fant package assertr, med god veiledning.
+
+# Jeg må ha en "string starter med"-funksjon! Det er jo årstall bak.
+# Denne virker, separat: a får celler med FALSE der teksten stemmer (og TRUE resten).
+# a <- str_starts(datasett$Indikator, "Lite fysisk aktive", negate = TRUE)
+
+# JEG BRUKER assert's mekanisme for å lage egen sjekkefunksjon og applisere den:
+# (Det stemte ikke at jeg måtte sette output til FALSE når testen IKKE fant feil
+# (med "negate = TRUE" ). Det ble riktig med den intuitive outputen.)
+
+sjekktekst <- function(x) str_starts(x, indikatortittel, negate = FALSE)
+
+sjekk <- datasett %>% 
+  select(LPnr, Indikator) %>%
+  filter(LPnr == indik_nr) %>%
+  #assert(in_set("Lite fysisk aktive"), Indikator)
+  assert(sjekktekst, Indikator)
+
+```
 
 ```{r Prosessere-data-og-plotte-alt-FORSTE-FORSOK, eval=FALSE}
 plotdata <- datasett %>%
@@ -236,14 +262,15 @@ ggplot(plotdata, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
 plotdata <- datasett %>%
   filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
   select(Aar, Sted_kode, Sted, LPnr, Indikator, contains("Verdi_"), Datotag_side4_innfilutfil, Enhet) %>%
-  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
-  split(.$hjemmeby) %>%
-  map(~ggplot(.) +
-        geom_col(mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
-        geom_col(mapping = aes(x = Sted_kode, y = Verdi_mellomGeonivaa)) +      # NEI, blir jo bare plottet oppå!
-        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
-        annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
-  )
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) 
+# %>%
+#   split(.$hjemmeby) %>%
+#   map(~ggplot(.) +
+#         geom_col(mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
+#         geom_col(mapping = aes(x = Sted_kode, y = Verdi_mellomGeonivaa)) +      # NEI, blir jo bare plottet oppå!
+#         labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
+#         annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
+#  )
 plotdata
 
 
