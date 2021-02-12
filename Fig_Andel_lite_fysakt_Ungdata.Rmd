@@ -191,23 +191,25 @@ sjekk <- datasett %>%
   
 ```
 
-```{r Verifisere-indikator-med-Assertr, eval=TRUE}
+```{r Verifisere-indikator-med-Assertr, eval=FALSE}
 # Fant package assertr, med god veiledning.
 
 # Jeg må ha en "string starter med"-funksjon! Det er jo årstall bak.
-# Denne virker, separat: a får celler med FALSE der teksten stemmer (og TRUE resten).
-# a <- str_starts(datasett$Indikator, "Lite fysisk aktive", negate = TRUE)
+# Denne virker, separat: a får celler med TRUE der teksten stemmer (og FALSE resten).
+# a <- str_starts(datasett$Indikator, "Lite fysisk aktive")
 
-# JEG BRUKER assert's mekanisme for å lage egen sjekkefunksjon og applisere den:
+# JEG BRUKER assert's mekanisme for å lage egen sjekkefunksjon og applisere den.
+# str_starts() er fra stringr.
 # (Det stemte ikke at jeg måtte sette output til FALSE når testen IKKE fant feil
 # (med "negate = TRUE" ). Det ble riktig med den intuitive outputen.)
 
-sjekktekst <- function(x) str_starts(x, indikatortittel, negate = FALSE)
+# JEG LEGGER INN DENNE i selve pipeline-chunken.
+
+sjekktekst <- function(x) str_starts(x, indikatortittel)
 
 sjekk <- datasett %>% 
   select(LPnr, Indikator) %>%
   filter(LPnr == indik_nr) %>%
-  #assert(in_set("Lite fysisk aktive"), Indikator)
   assert(sjekktekst, Indikator)
 
 ```
@@ -259,20 +261,64 @@ ggplot(plotdata, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
 ```
 
 ```{r Plotte_kommune-og-Land-også}
+# Legger inn den vellykkede sjekkefunksjonen fra ovenfor.
+# Må ha med Ungdata-året: Det kunne vært ulike landstall, og til label. Lage ut fra Indikator.
+# Trenger ikke datasettets AAR, det er profilårgang.
+# Reshape til én verdikolonne, og så plotte med 'group' for å skille byene.
+# Siden det kunne være ulike landstall for ulike byer (år!) bruker jeg fylkeskoden som Geo på landstallet.
+# Lage en sorteringsvariabel (x-akse).
+
+sjekktekst <- function(x) str_starts(x, indikatortittel)
+
 plotdata <- datasett %>%
   filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
-  select(Aar, Sted_kode, Sted, LPnr, Indikator, contains("Verdi_"), Datotag_side4_innfilutfil, Enhet) %>%
-  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) 
-# %>%
-#   split(.$hjemmeby) %>%
-#   map(~ggplot(.) +
-#         geom_col(mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
-#         geom_col(mapping = aes(x = Sted_kode, y = Verdi_mellomGeonivaa)) +      # NEI, blir jo bare plottet oppå!
-#         labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
-#         annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
-#  )
+  assert(sjekktekst, Indikator) %>%
+  select(Sted_kode, Sted, LPnr, Indikator, contains("Verdi_"), Datotag_side4_innfilutfil, Enhet) %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
+  mutate(Ungd_aar = word(Indikator, start = -1)) %>%
+  pivot_longer(cols = starts_with("Verdi"),                   # Lage én verdikolonne
+               names_to = "geonivaa", 
+               names_prefix = "Verdi_",
+               values_to = "verdi" ) 
+
+plotdata <- plotdata %>%                                      # Legge inn kommune- og FYLKESkode for K- og L-tall
+  mutate(Sted_kode = replace(Sted_kode, 
+                             geonivaa == "mellomGeonivaa", 
+                             str_sub(Sted_kode[geonivaa == "mellomGeonivaa"], start = 1, end = 4))) %>%
+  mutate(Sted_kode = replace(Sted_kode, 
+                             geonivaa == "referansenivaa", 
+                             str_sub(Sted_kode[geonivaa == "referansenivaa"], start = 1, end = 2))) %>%
+  mutate(geoniv_num = 2) %>%                                # Opprette en numerisk geoniv, brukes i å lage sortering
+  mutate(geoniv_num = replace(geoniv_num,
+                              geonivaa == "referansenivaa",
+                              1)) %>%
+  mutate(sortering = dense_rank(geoniv_num * verdi)) %>%
+  mutate(sortering = group_by(., hjemmeby)) 
+
+
+plotdata %>%
+  split(.$hjemmeby) %>%
+  map(~ggplot(.) +
+        geom_col(mapping = aes(x = sortering, y = verdi), stat = "identity") +
+        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
+        annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
+ )
 plotdata
+
+
 
 
 ```
 
+# DIVERSE SOM IKKE FUNKET: Etter Pivot(), replace Sted_kode med hhv. 4- og 2-sifret kode for geonivåene.
+    # plotdata %>% 
+    #   mutate(Sted_kode = replace(Sted_kode, geonivaa == "mellomGeonivaa", str_sub(Sted_kode, start = 1, end = 4)))
+    # FEIL: number of items to replace is not a multiple of replacement length. Antakelig samme som nedenfor.
+    
+    # plotdata[plotdata$geonivaa == "mellomGeonivaa", plotdata$Sted_kode, drop = FALSE] <-
+    #   str_sub(plotdata$Sted_kode, start = 1, end = 4)
+    # FEIL: Venstre side gir subset på 36 rader, høyre side gir 108 rader, og de må være like.
+    
+    #plotdata$Sted_kode[plotdata$geonivaa["mellomGeonivaa"]] <- str_sub(plotdata$Sted_kode, start = 1, end = 4)
+    
+    #  mutate(Sted_kode = str_sub(Sted_kode, start = 1, end = 4) if (geonivaa == "mellomGeonivaa") )

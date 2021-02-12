@@ -1,0 +1,250 @@
+---
+title: "Multiplot"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    number_sections: true
+    toc_float: true
+    toc_depth: 2
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: Hanna Helgeland
+---
+
+Denne filen er stjålet fra produktkatalog TEST. Kommentert ut et par ting hvor Hanna bruker filer lagret lokalt.
+Hele greia er nå kjørbar, og lager et plott for Stavanger i nederste chunk.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+options(scipen = 2)
+options(digits = 2)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(stringr)
+library(cowplot)
+library(ggbeeswarm)
+library(readxl)
+```
+
+<br>
+
+## Data
+
+```{r}
+# Orgdata
+file <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/PRODUKTER/KUBER/FRISKVIK_BYDEL/2020/GODKJENT/2020-02-25-17-37/INAKT_UNGDATA_2020-01-30-15-07.csv"
+filename <- basename(file)
+
+inakt <- read_delim(file, delim = ";") %>% 
+  separate(AAR, into = c("AAR_num"), extra = "drop", remove = FALSE) %>% 
+  mutate(GEO = as.integer(GEO),
+         AAR_num = as.integer(AAR_num))
+
+```
+
+
+GEO navn
+```{r}
+# kom_navn <- read_delim("../00_data/121219_kommunenummer_og_kommunenavn_per01012020.csv", delim = ";",
+#                        locale = locale(encoding = 'ISO-8859-15')) %>% 
+#   rename(navn = Kommunenavn)
+# fylke_navn <- read_delim("../00_data/fylkesnavn.csv", delim = ";",
+#                        locale = locale(encoding = 'ISO-8859-15')) %>% 
+#   filter(!navn %in% c("Jan Mayen", "Svaldbard"))
+# 
+# geonavn <- rbind(kom_navn, fylke_navn, data.frame(GEO = 0, navn = "Hele landet"))
+
+stednavn <- read_delim("F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Masterfiler/2021/Stedsnavn_SSB_TIL_GRAFER_Unicode.csv", delim = ";") %>% 
+  select(GEO, Sted)
+
+stednavn_GEO_BKFL <- stednavn %>% 
+  separate(GEO, into = "fylke", sep = 2, extra = "drop", remove = FALSE) %>% 
+  separate(GEO, into = "kommune", sep = 4, extra = "drop", remove = FALSE) %>% 
+  mutate(fylke = ifelse(Sted == "Oslo", "301", fylke),
+         fylke = ifelse(GEO > 30000 & GEO < 100000, "301", fylke),
+         kommune = ifelse(GEO > 30000 & GEO < 100000, "301", kommune)) %>%  # Oslo fylke fix
+  mutate(kommune = as.integer(kommune),
+         fylke = as.integer(fylke)) %>% 
+  mutate(land = 0,
+         kommune = ifelse(kommune < 100, NA, kommune))
+
+# write_delim(stednavn_GEO_BKFL, "../00_data/stednavn_GEO_BKFL.csv", delim = ";")
+```
+
+
+Filnavn: <geo>_<plassering>_tema.png
+F.eks 1106_6_tema.png
+
+[10.29] Bjørnæs, Steinar
+    N:/Helseprofiler_Rapportgenerator/Folkehelseprofiler/Importfiler/PROD/Kommune/Figurer/Temafigurer
+
+
+## Metrics
+
+```{r}
+inakt
+
+inakt %>% 
+  count(AAR)
+
+inakt %>% 
+  count(KJONN)
+
+inakt %>% 
+  count(ALDER)
+```
+
+## wrangling - preprosessing
+
+legge til stedsnavn
+```{r}
+inakt_pp <- inakt %>% 
+  mutate(GEO_type = case_when(nchar(GEO) %in% c(5,6) ~ "bydel",
+                              nchar(GEO) == 4 ~ "kommune",
+                              nchar(GEO) == 2 ~ "fylke",
+                              GEO == 0 ~ "land"),
+         plotorder = case_when(GEO_type == "land" ~ 0,
+                               GEO_type == "fylke" ~ 1,
+                               GEO_type == "kommune" ~ 2,
+                               GEO_type == "bydel" ~ 3)) %>% 
+  mutate(GEO = as.integer(GEO)) %>% 
+  left_join(stednavn_GEO_BKFL, .)
+
+```
+
+
+trekke ut bydeler, samt relaterte kommuner, fylke og landstall. 
+```{r}
+bydelsdata <- data.frame(kommune = c(301, 1103, 4601, 5001),
+                         fylke = c(301, 11, 46, 50))
+bydelsdata
+
+inakt_bydel <- inakt_pp %>% 
+  filter(GEO == 0 | GEO %in% bydelsdata$kommune | GEO %in% bydelsdata$fylke | GEO_type == "bydel")
+```
+
+siste tilgjengelig årgang (av de 3. siste)
+```{r}
+recent_year <- inakt_bydel %>% 
+  filter(AAR_num >= 2017,
+         GEO_type == "bydel") %>% 
+  group_by(kommune, AAR_num) %>% 
+  summarise(mean = mean(RATE, na.rm = TRUE)) %>% 
+  group_by(kommune) %>% 
+  filter(!is.na(mean)) %>% 
+  select(-mean)
+
+
+
+```
+
+
+```{r}
+jointable <- inakt_bydel %>%
+  filter(GEO_type == "bydel") %>% 
+  mutate(plotid = kommune) %>% 
+  select(plotid, GEO, fylke, kommune, land) %>% 
+  unique() %>% 
+  rename(bydel = GEO) %>% 
+  gather(key = GEO_type, value = GEO, bydel:land) %>% 
+  arrange(plotid) %>% 
+  unique() %>% 
+  left_join(., recent_year, by = c("plotid" = "kommune")) %>% 
+  select(-GEO_type)
+
+# jointable for regular type plots with bydel, kommmune, fylke, land bars side by side
+# jointable <- inakt_bydel %>%
+#   filter(GEO_type == "bydel") %>% 
+#   mutate(plotid = GEO) %>% 
+#   select(plotid, GEO, fylke, kommune, land) %>% 
+#   unique() %>% 
+#   #separate(GEO, into = c("fylke", "drop"), remove = FALSE, sep = 2) %>% 
+#   rename(bydel = GEO) %>% 
+#   gather(key = GEO_type, value = GEO, bydel:land) %>% 
+#   arrange(plotid)
+
+
+inakt_plot <- inakt_pp %>% 
+  left_join(jointable, ., by = c("GEO", "AAR_num"))
+inakt_plot  
+```
+
+
+
+## Multiplot - bydel, kommune (by), fylke, hele landet
+
+```{r}
+dir.create("inakt")
+```
+
+```{r}
+
+colors <- c("land" = "dodgerblue4", "fylke" = "olivedrab3", "kommune" = "steelblue", "bydel" = "skyblue")
+
+plots <- inakt_plot %>% 
+  #filter(plotid < 1150) %>%  
+  split(.$plotid) %>% 
+  map(~ggplot(., aes(x = fct_reorder(Sted, RATE), y = RATE, fill = GEO_type, group = GEO)) +
+            geom_bar(stat = "identity", width = 0.6) +
+            geom_text(aes(label = round(RATE,1)), 
+                    nudge_y = 3, size = 3.8) +
+            geom_text(aes(label = paste0("(Ungdata ", AAR_num, ")")),
+                    x = Inf, y = Inf, hjust = "inward", vjust = 3,
+                    check_overlap = TRUE,
+                    size = 3.2, color = "grey30") +
+            scale_fill_manual(values = colors) +
+            expand_limits(y = 100) +
+            theme_cowplot() +
+            theme(legend.position = "none",
+                axis.title.x = element_blank(),
+                axis.text.x = element_text(angle = 45, hjust = 1)) +
+            geom_text(aes(label = filename), 
+                    x = Inf, y = Inf, vjust = "inward", hjust = "inward", 
+                    size = 2.3, color = "grey80") +
+            labs(y = "Andel (prosent), standardisert"))
+paths <- stringr::str_c("inakt_", names(plots), ".png")
+
+#pwalk(list(paths, plots), ggsave, path = "res/inakt")
+
+pwalk(list(paths, plots), ~ggsave(filename = .x, plot = .y, height = 4, width = 5, path = "inakt"))
+
+```
+
+
+## testing
+```{r fig.height=5, fig.width=8}
+colors <- c("land" = "dodgerblue4", "fylke" = "olivedrab3", "kommune" = "steelblue", "bydel" = "skyblue")
+
+inakt_plot %>% 
+  filter(plotid == 1103) %>% 
+  mutate(plotname = paste(filename, " (", AAR_num, ")")) %>% 
+  #mutate(GEO_type = case_when(Sted == "Hele landet" ~ "land",
+  #                            Sted == "Oslo" ~ "fylke",
+  #                            TRUE ~ "bydel")) %>% 
+  ggplot(aes(x = fct_reorder(Sted, RATE), y = RATE, fill = GEO_type)) +
+          geom_bar(stat = "identity", width = 0.6) +
+          geom_text(aes(label = round(RATE,1)), 
+                    nudge_y = 3, size = 3.8) +
+          geom_text(aes(label = paste0("(Ungdata ", AAR_num, ")")),
+                    x = Inf, y = Inf, hjust = "inward", vjust = 3,
+                    check_overlap = TRUE,
+                    size = 3.2, color = "grey30") +
+          scale_fill_manual(values = colors) +
+          expand_limits(y = 100) +
+          theme_cowplot() +
+          theme(legend.position = "none",
+                axis.title.x = element_blank(),
+                axis.text.x = element_text(angle = 45, hjust = 1)) +
+          geom_text(aes(label = filename), 
+                    x = Inf, y = Inf, vjust = "inward", hjust = "inward", 
+                    size = 2.8, color = "grey70") +
+          labs(y = "Andel (prosent), standardisert")
+#ggsave("res/inakt/bydel/Stavanger.png")
+```
+
