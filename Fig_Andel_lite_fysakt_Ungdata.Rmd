@@ -261,12 +261,17 @@ ggplot(plotdata, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
 ```
 
 ```{r Plotte_kommune-og-Land-også}
+# Denne fungerer: Lager plott 'by' kommune, med bydelene sortert.
+# Mangler foreløpig geonavnene (til x-aksen) og farger.
+
 # Legger inn den vellykkede sjekkefunksjonen fra ovenfor.
 # Må ha med Ungdata-året: Det kunne vært ulike landstall, og til label. Lage ut fra Indikator.
 # Trenger ikke datasettets AAR, det er profilårgang.
-# Reshape til én verdikolonne, og så plotte med 'group' for å skille byene.
+# Reshape (pivot) til én verdikolonne, og så lage en gruppering for å skille byene.
 # Siden det kunne være ulike landstall for ulike byer (år!) bruker jeg fylkeskoden som Geo på landstallet.
-# Lage en sorteringsvariabel (x-akse).
+# Lage en sorteringsvariabel for x-aksen ut fra geonivå og verdi: Da kan jeg få landstallet sortert først. Med
+# bare to nivåer kommer byen innimellom bydelene.
+# For å få søylene sortert, måtte det ligge en sorteringskommando inne i grafkommandoen, hjalp ikke å sortere på forhånd.
 
 sjekktekst <- function(x) str_starts(x, indikatortittel)
 
@@ -292,18 +297,19 @@ plotdata <- plotdata %>%                                      # Legge inn kommun
   mutate(geoniv_num = replace(geoniv_num,
                               geonivaa == "referansenivaa",
                               1)) %>%
-  mutate(sortering = dense_rank(geoniv_num * verdi)) %>%
-  mutate(sortering = group_by(., hjemmeby)) 
-
-
+  group_by(hjemmeby) %>%
+  mutate(sortering = dense_rank(geoniv_num * verdi)) 
+  
 plotdata %>%
   split(.$hjemmeby) %>%
   map(~ggplot(.) +
-        geom_col(mapping = aes(x = sortering, y = verdi), stat = "identity") +
+        geom_col(mapping = aes(x =  fct_reorder(Sted_kode, sortering) , y = verdi), position = "dodge") +
+        # stat_identity er default for geom_col.
+        # Position 'dodge' for å unngå stabling av søyler for by og land, siden det er flere rader med den verdien.
         labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
         annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
  )
-plotdata
+#plotdata
 
 
 
