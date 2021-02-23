@@ -260,7 +260,7 @@ ggplot(plotdata, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
 
 ```
 
-```{r Plotte_kommune-og-Land-også}
+```{r Plotte_kommune-og-Land-også, eval=FALSE}
 # Denne fungerer: Lager plott 'by' kommune, med bydelene sortert.
 # Mangler foreløpig geonavnene (til x-aksen) og farger.
 
@@ -316,7 +316,63 @@ plotdata %>%
 
 ```
 
-# DIVERSE SOM IKKE FUNKET: Etter Pivot(), replace Sted_kode med hhv. 4- og 2-sifret kode for geonivåene.
+
+```{r Geonavn}
+# Kopiert fra forrige chunk (som funker men trenger forfining) og videreutviklet.
+# Merge på en Geomaster-fil med navnene. Da må jeg ha riktige geokoder, så trikset med fylkeskode
+# for landstall må legges på etter merge.
+
+geodata <- readr::read_csv2(geomaster)
+  
+sjekktekst <- function(x) str_starts(x, indikatortittel)
+
+plotdata <- datasett %>%
+  filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
+  assert(sjekktekst, Indikator) %>%
+  select(Sted_kode, Indikator, contains("Verdi_"), Datotag_side4_innfilutfil) %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
+  mutate(Ungd_aar = word(Indikator, start = -1)) %>%
+  pivot_longer(cols = starts_with("Verdi"),                   # Lage én verdikolonne
+               names_to = "geonivaa", 
+               names_prefix = "Verdi_",
+               values_to = "verdi" ) 
+
+plotdata <- plotdata %>%
+  mutate(Sted_kode = replace(Sted_kode,                       # Legge inn kommunekode for K-tall
+                             geonivaa == "mellomGeonivaa", 
+                             str_sub(Sted_kode[geonivaa == "mellomGeonivaa"], start = 1, end = 4))) %>%
+  mutate(Sted_kode = replace(Sted_kode, 
+                             geonivaa == "referansenivaa", 
+                             "00")) %>%                       # Riktig landskode før join.
+  left_join(geodata, by = "Sted_kode") %>%                    # Koble på geo-navn.
+  mutate(Sted_kode = replace(Sted_kode,                       # Legge inn FYLKESkode for landstall
+                             geonivaa == "referansenivaa", 
+                             hjemmeby[geonivaa == "referansenivaa"])) %>%
+  mutate(geoniv_num = 2) %>%                                  # Opprette en numerisk geoniv, brukes i å lage sortering
+  mutate(geoniv_num = replace(geoniv_num,
+                              geonivaa == "referansenivaa",
+                              1)) %>%
+  group_by(hjemmeby) %>%
+  mutate(sortering = dense_rank(geoniv_num * verdi)) 
+  
+plotdata %>%
+  split(.$hjemmeby) %>%
+  map(~ggplot(.) +
+        geom_col(mapping = aes(x =  fct_reorder(Sted_kode, sortering) , y = verdi), position = "dodge", label = .$Sted) +
+        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
+        annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
+ )
+#plotdata
+
+```
+
+
+
+
+
+# DIVERSE SOM IKKE FUNKET: (se også notater i ON, IT-ting\Øving: Temafigur Ungdata)
+
+# Hensikt: Etter Pivot(), replace Sted_kode med hhv. 4- og 2-sifret kode for geonivåene.
     # plotdata %>% 
     #   mutate(Sted_kode = replace(Sted_kode, geonivaa == "mellomGeonivaa", str_sub(Sted_kode, start = 1, end = 4)))
     # FEIL: number of items to replace is not a multiple of replacement length. Antakelig samme som nedenfor.
