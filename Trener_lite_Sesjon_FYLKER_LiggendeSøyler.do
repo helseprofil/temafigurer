@@ -9,11 +9,12 @@
 	Markere aktuelt fylke med avvikende farge.
 	Symbol i grafen og forklaring i Note nedenfor hvis kommunen mangler tall. Annen 
 	mekanisme enn i Alko/hasj-figuren.
-	Navn på alle søyler.
+	Tallverdien som label på alle søyler.
 	
-	V2: 07.03.19 - Legge inn forklarende tekst i grafen: grønn linje er hele landet.
+	(V2: 07.03.19 - Legge inn forklarende tekst i grafen: grønn linje er hele landet.) IKKE I SESJONSDATA.
 	
-Inndata: Indikator.txt for KOMMUNER, der alle tallene er ferdig preppet fram.
+Inndata: Indikator.txt for Fylker, der alle tallene er ferdig preppet fram. 
+(Brukte opprinnelig filen for KOMMUNER, men der er tallene to-årige.)
 
 Figur nr 4
 
@@ -37,6 +38,7 @@ Endringer/utvikling:
 	- 23.02.2021 (Trener lite sesjon FYLKER)
 	- Egne versjoner for landet som hori. linje, landet som søyle, og denne med hori. søyler.
 	  Liggende søyler krever nybygging av grafen, for det er ikke automatikk i å flytte på aksene.
+	- 12.3.21 Lagt på tallverdi som label på søylene.
 */
 *===============================================================================
 set more off
@@ -46,7 +48,7 @@ macro drop _all
 
 * REDIGER/SJEKK
 *-----------------------------------------------------------------
-local modus = "TEST" 	//Tillatt: TEST, SKARP  - styrer både utdata og løkke for én eller alle grafer.
+local modus = "SKARP" 	//Tillatt: TEST, SKARP  - styrer både utdata og løkke for én eller alle grafer.
 local profilaar ="2021"		//Henter Geomaster fra dette året.
 local geonivaa ="fylke"  //Tillatte verdier: "fylke" ("kommune", "bydel" ikke aktuelle her). 
 						  //OBS fylker bør styres separat, se toppen av grafløkka.
@@ -64,8 +66,8 @@ else if "`geonivaa'" == "bydel" {
 	di as err _n "Dette er script for FYLKER, bruk det andre for K/B."
 	exit
 } // fra Ungdata - for BYDEL
-else if "`geonivaa'" == "fylke" { //Bruker samme datafil som for kommunene.
-	local indik1=23
+else if "`geonivaa'" == "fylke" { //
+	local indik1=20
 } 
 
 local Indik1tekst "Trener sjeldnere enn ukentlig"
@@ -76,7 +78,7 @@ local Indik1tekst "Trener sjeldnere enn ukentlig"
 *local datafil "Indikator_ny.txt"
 
 * SKARP - Tar den som faktisk er lastet opp FOR KOMMUNENE
-local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/Kommune\Flatfiler"
+local datakatalog "N:\Helseprofiler_Rapportgenerator\Folkehelseprofiler\Importfiler\PROD/Fylke\Flatfiler"
 local datafil "Indikator.txt"
 
 global geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Masterfiler/`profilaar'\Stedsnavn_SSB_TIL_GRAFER_Unicode.dta"
@@ -120,7 +122,10 @@ drop if geo>80 & geo<100			//Helsereg
 drop _merge
 
 *------------------------------------------------------------------------
-**** SPLITT: Bydeler krever litt andre detaljer, men parallelt opplegg.
+* Denne bolken er tilpasset Indikator.txt for KOMMUNER (til å lage graf for K eller F). 
+* Ved bruk av FYLKESfilen, bruk neste bolk.
+
+/**** SPLITT: Bydeler krever litt andre detaljer, men parallelt opplegg.
 **** FYLKER skal ha samme data som kommuner, men grafen er litt annerledes.
 *if "`geonivaa'" == "kommune" | "`geonivaa'" == "fylke" {
 
@@ -147,6 +152,19 @@ drop _merge
 	replace fylkesnavn = fylkesnavn[_n-1] if fylkesnavn==""
 	*/	
 *} //FERDIG IF KOMMUNE/FYLKE
+*/
+*--------------------------------------------------------------------------
+* Ved bruk av Indikator.txt for FYLKER:
+	keep if strlen(Sted_kode)==2						//Kan kaste alt annet allerede.
+	sort geo
+	gen hjemmefylke = geo 								//Trenger den senere...
+	generate fylkestall = real(verdi_mellom)					
+	replace fylkestall  = real(verdi_refera[_n+1]) if geo == 0	//Henter landstallet inn på raden for landet
+	
+	****Batchnummer, til tekst i hjørnet av figuren
+	local batchnr = datotag_side4_innfilutfil[10]	//Noen tomme rader øverst
+
+
 *--------------------------------------------------------------------------
 
 *sort hjemmefylke geo
@@ -190,8 +208,8 @@ gen radnr = _n
 *	 -Landet øverst i liggende søyler
 sort fylkestall geo	in 2/l		//hopper over landsraden, sorterer resten
 gen radnr = _n
-gsort -radnr
-replace radnr = _n
+gsort -radnr					//Må ha høyeste radnr for det som skal lengst vekk fra x-aksen (landet).
+replace radnr = _n				//Derfor snu rekkefølgen og omnummerere.
 
 /* TRENGS IKKE når det er selve fylkene som plottes:
 Finne første og siste rad i hvert fylke (til x-aksen)
@@ -204,7 +222,7 @@ replace sisterad =sisterad[_n-1] if sisterad==.
 sort hjemmefylke geo
 */
 
-*Lage en label til x-aksen i fylkesgrafene: Må koble navnene til radnr. ist.f. geokode.
+*Lage en label til x-aksen i fylkesgrafene: Må koble navnene til radnr. ist.f. til geokode.
 *forvalues i = 1/4 {
 sort radnr 
 forvalues i = 1/$antall {
@@ -269,7 +287,7 @@ local strek = ustrunescape("\u25AC")
 	*Fylkesgrafer: må styres separat (gidder ikke kjøre 356 ...)
 	
 if "`modus'" == "TEST" {
-	local start = 5	//Lager én graf
+	local start = 1	//Lager én graf
 }
 else {
 	gen startflagg =_n if geo<100
@@ -358,9 +376,10 @@ di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "
 */	
 	*Fylker	: Liggende søyler dvs. option 'horizontal', men da blir det ikke konsekvent hva som er x og y i kommandoene!
 	*'xlabel' etc. virker på vannrett akse, men verdiene på aksen er y-verdiene.
+	*I scatter-overlays er første variabel loddrett akse, som normalt.
 *	else if "`geonivaa'"=="fylke" {
 	graph twoway ///
-		(bar fylkestall radnr ,	horizontal	/// 
+		(bar fylkestall radnr ,	horizontal 	/// 
 		color("`kommunefarge'") barwidth(0.8) 						///
 		xlabel(0(10)`ymax', angle(horizontal) valuelabel glcolor(white)) ///		
 		xtitle("`yaksetekst'", size(medium) /*orientation(vertical) */) ///
@@ -369,8 +388,9 @@ di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "
 		ylabel(1/$antall, noticks valuelabel angle(0) labsize(*`tekstskalering') nogrid) ///
 		yscale(titlegap(3) range(`xmin' `xmax'))	 ///
 		ytitle("")			///
+		///
 		graphregion(fcolor(white) lcolor(white) ilcolor(white)) ///
-		plotregion(fcolor(white) margin(zero)) 					///
+		plotregion(fcolor(white) lcolor(white) margin(zero)) 	///
 		legend(off) 											///
 		/*note(" " "`missingtekst' ", size(small) )		*/	///
 		caption("Trening sesjon: Indikator.txt, batchnr. `batchnr'", position(5) ring(5) size(vsmall) color(gs9) )	///
@@ -385,10 +405,12 @@ di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "
 		(scatter radnr datamangler  if hjemmefylke==$hjemfylke & length(Sted_kode)>2 , /// Setter på symbol der søyle mangler
 		msymbol(smcircle) msize(*`tekstskalering') mcolor(gs4) ///
 		)													///
-		(bar fylkestall radnr if radnr == `i', horizontal	///		Uthever aktuelt fylke 
+		(bar fylkestall radnr if radnr == `i', horizontal 	///		Uthever aktuelt fylke 
 		color("`fylkesfarge'") barwidth(0.8) )				///
 		(bar fylkestall radnr if geo == 0 ,	horizontal		///		Søyle for landstallet
-		color("`landsfarge'") barwidth(0.8) )	
+		color("`landsfarge'") barwidth(0.8) )				///
+		(scatter radnr fylkestall , 						///		Tallverdiene som labels på hver søyle (Merk var-rekkefølgen ...)
+		msymbol(none) mlab(fylkestall) mlabpos(3) mlabcolor(black) )
 	*gr_edit plotregion1.AddLine added_lines editor 0.5 `normal_linje' 11.5 `normal_linje'
 	*gr_edit plotregion1.added_lines[1].style.editstyle  ///
 	*	linestyle( width(thick) color(`landsfarge') pattern(solid)) 
