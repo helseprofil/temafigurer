@@ -1,0 +1,386 @@
+---
+title: "Fig_Andel_lite_fysakt_Ungdata"
+author: "Steinar Bjørnæs"
+date: "22 1 2021"
+output: 
+    html_document:
+    df_print: paged
+    toc: yes
+    number_sections: true
+    toc_float: true
+    toc_depth: 2
+    fig_caption: yes
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+De første ca 30 linjene (unntatt første chunk) er autogenerert da filen ble opprettet.
+
+```{r}
+# Starte med blanke ark
+rm(list = ls())
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars, eval=FALSE}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE, eval=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+# Og så er det min tur:
+
+Temafigur FHP-2021: UNGDATA, ANDEL LITE FYSISK AKTIVE.
+
+Inndata: Ferdig flatfil Indikator.txt. Der er den (ganske hårete) databehandlingen
+av Ungdatatall gjort ferdig.
+Scripting gjøres med Git versjonskontroll, med remote repository på Github helseprofil/temafigurer.
+
+I utviklingen: Bruker fjorårets Indikator.txt.
+Bruker riktig indikator "Lite fysisk aktive".
+Den er nummer 24 i Kommune og 19 i Bydel i denne testfilen.
+
+Spec kommune/bydel:
+Søyler for hver kommune i fylket.
+Markere aktuell kommune med avvikende farge.
+? Rød/grønn linje for lands- eller fylkes (by-) tall?
+  ## OBS: For Bydel går dette an, men for Kommune vil det som regel være mer
+  ## enn ett av både fylkes- og Landstall i treårsperioden.
+Symbol i grafen og forklaring i Note nedenfor hvis kommunen mangler tall.
+
+FYLKER: Antakelig IKKE AKTUELT, vi bruker ikke Ungdata i fylkesprofiler.
+
+Inndata: Indikator.txt for KOMMUNER/Bydel, der alle tallene er ferdig preppet fram.
+
+Data til label "kommunenavn": Merge på en masterfil med de navnene vi bruker hele veien.
+Styres av "profilaar".
+
+Inndata-filnavnet (som har datotag) ligger som grå minitekst
+(nederst?) i hjørnet på figurene.
+
+#-------------------------------------------------------------------------------
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Nødvendige packages
+## Jeg er i The tidyverse - install.packages("tidyverse") tar inn alt.
+library(tidyverse)
+library(knitr)
+library(assertthat)     # Brukes i standard-R-chunken.
+library(assertr)
+
+```
+
+```{r Paths-inndata-utdata-og-andre-predefinerte-verdier}
+geonivaa <- "bydel" # Tillatt: "bydel", "kommune"
+profilaar <- 2021
+pos <- 4            # Figurposisjon øverst s.3 - VERIFISÉR
+indikatortittel <- "Lite fysisk aktive"   # Sjekker om teksten starter med dette.
+
+result_root <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_"
+inndata_root <- "N:/Helseprofiler_Rapportgenerator/Folkehelseprofiler/Importfiler/PROD"
+
+geomaster <- paste(result_root, "Masterfiler", profilaar, "Stedsnavn_SSB_TIL_GRAFER_Unicode.csv", sep = "/")
+
+## SKARP:
+# inndatafil <- paste(inndata_root, geonivaa, "Flatfiler/Indikator.txt", sep = "/") 
+# utdata <- paste(result_root, "PRODUKSJON/PRODUKTER/SSRS_filer", profilaar, geonivaa, "Temafigurer/Fysakt_Ungdata", sep = "/")
+# indik_nr <- 
+
+## UTVIKLING:
+inndatafil <- "N:/Helseprofiler_Rapportgenerator/Folkehelseprofiler/Importfiler/PROD/Bydel/Flatfiler/FHP_2020/Indikator.txt"
+utdata <- paste(result_root, "PRODUKSJON/PRODUKTER/SSRS_filer", profilaar, geonivaa, "Temafigurer/TEST", sep = "/")
+
+if(geonivaa == "bydel") {
+  indik_nr <- 19
+} else if(geonivaa == "kommune") {
+  indik_nr <- 24
+}
+
+```
+ I Geomaster-filen ligger: «Sted_kode», string stedskode ned til bydel dvs 6-sifret
+ (dvs. geo-numre med ledende null). 
+ «Sted», kortversjon av stedsnavn. 
+ «geo» og «GEO», numerisk stedskode, (hadde kortversjon av navn som value label i Stata). 
+
+
+
+# A) Prøver i Standard-R - kjøres ikke sammen med resten (eval=FALSE)
+```{r Standard-R, eval=FALSE}
+# Preppe data
+## TAB-separert, desimaltegn er komma. 
+## Det ligger "-" for manglende tall, så "Verdi_..."-kolonnene kan bli lest som character. Fikses med "na =".
+## Datotag_... leses som stort tall. Fikses med "col_types...".
+datasett <- readr::read_tsv(inndatafil, 
+                            col_names = TRUE, 
+                            col_types = cols("Datotag_side4_innfilutfil" = col_character()), 
+                            locale = locale(decimal_mark = ","), 
+                            na = "-")
+
+# Subset, gamlemåten: Krymper datasettet trinnvis
+datauttrekk <- datasett[datasett$LPnr == indik_nr, ]
+datauttrekk <- datauttrekk[datauttrekk$SpraakId == "BOKMAAL", ]
+
+# Sjekk at det er riktig indikator
+assertthat::assert_that(stringr::str_starts(datauttrekk$Indikator[1], "Lite fysisk aktive"))
+
+# Legge inn grupperingen i selve datasettet
+datauttrekk$hjemmeby <- str_sub(datauttrekk$Sted_kode, start = 1, end = 2)
+
+# Få grafer for fire byer: Hardkodet løkkestyring. 
+geokoder <- c("03", "11", "46", "50")
+
+for (i in 1:4) {                                        # Løkke 1:4 for å få alle byene
+  by <- geokoder[i]
+  data <- datauttrekk[datauttrekk$hjemmeby == by, ]     # Ekstrahere de radene som matcher.
+  
+  # Denne grafen funker alene, men ikke som løkke?
+  # Ingen feilmelding, men jeg ser ingen plott.
+  # AHA: Må ha med en print() til slutt i løkka! (Takk, Hanna)
+  p <- ggplot(data, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
+    geom_col() +
+    labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) + 
+    annotate(geom = "text", x = Inf, y = Inf, vjust = "inward", hjust = "inward", 
+             label = "Data fra Indikator.txt batchnr=")
+  print(p)
+}
+
+```
+
+
+# B) Prøver å gjøre det samme med tidyverse-triksene:
+```{r Data innlesing}
+## TAB-separert, desimaltegn er komma. 
+## Det ligger "-" for manglende tall, så "Verdi_..."-kolonnene kan bli lest som character. Fikses med "na =".
+## Datotag_... leses som stort tall. Fikses med "col_types...".
+datasett <- readr::read_tsv(inndatafil, 
+                            col_names = TRUE, 
+                            col_types = cols("Datotag_side4_innfilutfil" = col_character()), 
+                            locale = locale(decimal_mark = ","), 
+                            na = "-")
+```
+
+
+```{r Verifisere-indikator-med-Assertthat, eval=FALSE}
+# Sjekke indikatorteksten: bare les ut en celle, styrt av indik_nr, uten å droppe noe.
+  ## Er det da [[]] brukes, for å aksessere ett element?
+
+  ## Det var ikke så lett - jeg får ikke til siste linje, selve testen med assert_that(). 
+  ## Har prøvd med og uten map(), og med og uten ".$" for å få tak i kolonnen Indikator.
+  ## Bruke [[]] hadde ingen effekt.
+sjekk <- datasett %>% 
+  select(LPnr, Indikator) %>%
+  filter(LPnr == indik_nr)  %>%
+  assert_that(str_starts(.$Indikator[1], "Lite fysisk aktive"))
+  
+```
+
+```{r Verifisere-indikator-med-Assertr, eval=FALSE}
+# Fant package assertr, med god veiledning.
+
+# Jeg må ha en "string starter med"-funksjon! Det er jo årstall bak.
+# Denne virker, separat: a får celler med TRUE der teksten stemmer (og FALSE resten).
+# a <- str_starts(datasett$Indikator, "Lite fysisk aktive")
+
+# JEG BRUKER assert's mekanisme for å lage egen sjekkefunksjon og applisere den.
+# str_starts() er fra stringr.
+# (Det stemte ikke at jeg måtte sette output til FALSE når testen IKKE fant feil
+# (med "negate = TRUE" ). Det ble riktig med den intuitive outputen.)
+
+# JEG LEGGER INN DENNE i selve pipeline-chunken.
+
+sjekktekst <- function(x) str_starts(x, indikatortittel)
+
+sjekk <- datasett %>% 
+  select(LPnr, Indikator) %>%
+  filter(LPnr == indik_nr) %>%
+  assert(sjekktekst, Indikator)
+
+```
+
+```{r Prosessere-data-og-plotte-alt-FORSTE-FORSOK, eval=FALSE}
+plotdata <- datasett %>%
+  filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
+  split(.$hjemmeby) %>%
+  map(~ggplot(., mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
+        geom_col() +
+        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) + 
+        annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
+  )
+plotdata
+
+```
+
+LØST problem: Ingen feilmeldinger, og bare grønn markering i margen under kjøring, men jeg ser ingen plott.
+    I standard-R fungerer ggplot-kommandoen når den kjøres alene, så den er ok i seg selv.
+    Jeg ser i Environment at plotdata oppstår, som List of 4. Da er jeg inne på noe, det er 4 byer.
+    Men hvorfor lages det ikke noe plot?
+    
+    Hanna forteller at chunken kjører og lager plott hos henne! Da må det være noe med mitt systemoppsett.
+    Men de andre plottene vises jo??
+
+    Hanna bruker pwalk() etterpå for å få lagret de separate plottfilene.
+    (pwalk er for å applisere en funksjon på hver rad i en data.frame)
+    
+==> HER MÅ JEG BRUKE en kommando for å se dataene rett etter map()! Da fungerte det.
+
+
+```{r Prosessere-data-og-plotte-én-by-RÅ-GRAF, eval=FALSE}
+# Dette funker.
+# Når jeg legger på pipe og map() rundt ggplot, kræsjer det med en melding jeg ikke skjønner.
+plotdata <- datasett %>%
+  filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
+  # split(.$hjemmeby) %>%
+  filter(hjemmeby == "46") 
+
+ggplot(plotdata, mapping = aes(x = Sted_kode, y = Verdi_lavesteGeonivaa)) +
+        geom_col() +
+        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) + 
+        annotate(geom = "text", x = Inf, y = Inf, vjust = "inward", hjust = "inward", 
+                 label = "Indikator.txt batchnr=")
+
+
+```
+
+```{r Plotte_kommune-og-Land-også, eval=FALSE}
+# Denne fungerer: Lager plott 'by' kommune, med bydelene sortert.
+# Mangler foreløpig geonavnene (til x-aksen) og farger.
+
+# Legger inn den vellykkede sjekkefunksjonen fra ovenfor.
+# Må ha med Ungdata-året: Det kunne vært ulike landstall, og til label. Lage ut fra Indikator.
+# Trenger ikke datasettets AAR, det er profilårgang.
+# Reshape (pivot) til én verdikolonne, og så lage en gruppering for å skille byene.
+# Siden det kunne være ulike landstall for ulike byer (år!) bruker jeg fylkeskoden som Geo på landstallet.
+# Lage en sorteringsvariabel for x-aksen ut fra geonivå og verdi: Da kan jeg få landstallet sortert først. Med
+# bare to nivåer kommer byen innimellom bydelene.
+# For å få søylene sortert, måtte det ligge en sorteringskommando inne i grafkommandoen, hjalp ikke å sortere på forhånd.
+
+sjekktekst <- function(x) str_starts(x, indikatortittel)
+
+plotdata <- datasett %>%
+  filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
+  assert(sjekktekst, Indikator) %>%
+  select(Sted_kode, Sted, LPnr, Indikator, contains("Verdi_"), Datotag_side4_innfilutfil, Enhet) %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
+  mutate(Ungd_aar = word(Indikator, start = -1)) %>%
+  pivot_longer(cols = starts_with("Verdi"),                   # Lage én verdikolonne
+               names_to = "geonivaa", 
+               names_prefix = "Verdi_",
+               values_to = "verdi" ) 
+
+plotdata <- plotdata %>%                                      # Legge inn kommune- og FYLKESkode for K- og L-tall
+  mutate(Sted_kode = replace(Sted_kode, 
+                             geonivaa == "mellomGeonivaa", 
+                             str_sub(Sted_kode[geonivaa == "mellomGeonivaa"], start = 1, end = 4))) %>%
+  mutate(Sted_kode = replace(Sted_kode, 
+                             geonivaa == "referansenivaa", 
+                             str_sub(Sted_kode[geonivaa == "referansenivaa"], start = 1, end = 2))) %>%
+  mutate(geoniv_num = 2) %>%                                # Opprette en numerisk geoniv, brukes i å lage sortering
+  mutate(geoniv_num = replace(geoniv_num,
+                              geonivaa == "referansenivaa",
+                              1)) %>%
+  group_by(hjemmeby) %>%
+  mutate(sortering = dense_rank(geoniv_num * verdi)) 
+  
+plotdata %>%
+  split(.$hjemmeby) %>%
+  map(~ggplot(.) +
+        geom_col(mapping = aes(x =  fct_reorder(Sted_kode, sortering) , y = verdi), position = "dodge") +
+        # stat_identity er default for geom_col.
+        # Position 'dodge' for å unngå stabling av søyler for by og land, siden det er flere rader med den verdien.
+        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
+        annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
+ )
+#plotdata
+
+
+
+
+```
+
+
+```{r Geonavn}
+# Kopiert fra forrige chunk (som funker men trenger forfining) og videreutviklet.
+# Merge på en Geomaster-fil med navnene. Da må jeg ha riktige geokoder, så trikset med fylkeskode
+# for landstall må legges på etter merge.
+
+geodata <- readr::read_csv2(geomaster)
+  
+sjekktekst <- function(x) str_starts(x, indikatortittel)
+
+plotdata <- datasett %>%
+  filter(LPnr == indik_nr, SpraakId == "BOKMAAL") %>%
+  assert(sjekktekst, Indikator) %>%
+  select(Sted_kode, Indikator, contains("Verdi_"), Datotag_side4_innfilutfil) %>%
+  mutate(hjemmeby = str_sub(.$Sted_kode, start = 1, end = 2)) %>%
+  mutate(Ungd_aar = word(Indikator, start = -1)) %>%
+  pivot_longer(cols = starts_with("Verdi"),                   # Lage én verdikolonne
+               names_to = "geonivaa", 
+               names_prefix = "Verdi_",
+               values_to = "verdi" ) 
+
+plotdata <- plotdata %>%
+  mutate(Sted_kode = replace(Sted_kode,                       # Legge inn kommunekode for K-tall
+                             geonivaa == "mellomGeonivaa", 
+                             str_sub(Sted_kode[geonivaa == "mellomGeonivaa"], start = 1, end = 4))) %>%
+  mutate(Sted_kode = replace(Sted_kode, 
+                             geonivaa == "referansenivaa", 
+                             "00")) %>%                       # Riktig landskode før join.
+  left_join(geodata, by = "Sted_kode") %>%                    # Koble på geo-navn.
+  mutate(Sted_kode = replace(Sted_kode,                       # Legge inn FYLKESkode for landstall
+                             geonivaa == "referansenivaa", 
+                             hjemmeby[geonivaa == "referansenivaa"])) %>%
+  mutate(geoniv_num = 2) %>%                                  # Opprette en numerisk geoniv, brukes i å lage sortering
+  mutate(geoniv_num = replace(geoniv_num,
+                              geonivaa == "referansenivaa",
+                              1)) %>%
+  group_by(hjemmeby) %>%
+  mutate(sortering = dense_rank(geoniv_num * verdi)) 
+  
+plotdata %>%
+  split(.$hjemmeby) %>%
+  map(~ggplot(.) +
+        geom_col(mapping = aes(x =  fct_reorder(Sted_kode, sortering) , y = verdi), position = "dodge", label = .$Sted) +
+        labs(x = "Bydeler", y = "Andel lite aktive (prosent)" ) +
+        annotate(geom = "text", x = Inf, y = Inf, label = "Indikator.txt batchnr=")
+ )
+#plotdata
+
+```
+
+
+
+
+
+# DIVERSE SOM IKKE FUNKET: (se også notater i ON, IT-ting\Øving: Temafigur Ungdata)
+
+# Hensikt: Etter Pivot(), replace Sted_kode med hhv. 4- og 2-sifret kode for geonivåene.
+    # plotdata %>% 
+    #   mutate(Sted_kode = replace(Sted_kode, geonivaa == "mellomGeonivaa", str_sub(Sted_kode, start = 1, end = 4)))
+    # FEIL: number of items to replace is not a multiple of replacement length. Antakelig samme som nedenfor.
+    
+    # plotdata[plotdata$geonivaa == "mellomGeonivaa", plotdata$Sted_kode, drop = FALSE] <-
+    #   str_sub(plotdata$Sted_kode, start = 1, end = 4)
+    # FEIL: Venstre side gir subset på 36 rader, høyre side gir 108 rader, og de må være like.
+    
+    #plotdata$Sted_kode[plotdata$geonivaa["mellomGeonivaa"]] <- str_sub(plotdata$Sted_kode, start = 1, end = 4)
+    
+    #  mutate(Sted_kode = str_sub(Sted_kode, start = 1, end = 4) if (geonivaa == "mellomGeonivaa") )
