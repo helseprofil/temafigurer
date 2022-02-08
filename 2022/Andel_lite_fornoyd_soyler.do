@@ -39,7 +39,7 @@ label values riskfakt riskfakt
 * Sette noen parametre
 global ymax = 100
 local mindrelik = ustrunescape("\u2a7d")
-local yaksetekst "Andel lite fornøyde (fornøydhet `mindrelik' 5)," "i prosent"	
+local yaksetekst "Andel lite fornøyde (fornøydhet `mindrelik' 5), i prosent"	
 local xaksetekst "Antall risikofaktorer"
 
 * Avvist forslag:
