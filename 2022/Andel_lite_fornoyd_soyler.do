@@ -57,7 +57,7 @@ local kommunefarge "9 117 181"	//Mellomblå
 graph twoway ///
 	(bar andel riskfakt ,		/// 
 	color("`landsfarge'") barwidth(0.6) 						///
-	ylabel(0(20)$ymax, angle(horizontal) grid)	///		
+	ylabel(0(20)$ymax, angle(horizontal) nogrid)	///		
 	ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
 	yscale(range($ymax )) ///  Uten denne får ikke øverste ylabel noen gridline.
 	///yline(`normal_linje') 									///
