@@ -1,0 +1,99 @@
+---
+title: "Fig Befolkningsvekst"
+author: "Steinar Bjørnæs"
+date: '2022-11-04'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+```
+
+
+# Temafigur 2023: Befolkningsvekst.
+Figur 4 (i midten side 3, PLASSNUMMER 5): Tidslinje for kommune, fylke og land.
+
+```{r inndata}
+DATA <- read_delim("F:\\Forskningsprosjekter\\PDB 2455 - Helseprofiler og til_\\PRODUKSJON\\PRODUKTER\\KUBER\\KOMMUNEHELSA\\KH2023NESSTAR\\BEFVEKST_2022-10-28-11-05.csv", delim = ";", locale = locale(decimal_mark = "."))
+
+```
+
+
+```{r parametre}
+geonivaa <- "K"
+
+```
+
+FØRSTE VERSJON: For dummy-profil å sende til midtsideforfatterne.
+Trenger bare én kommune, med fylke og land.
+Lager den først, og legger til map-løkke over alle geo senere.
+
+```{r wrangling}
+# Plukke ut kategorier og kolonner. Sette på en Geoniv til å filtrere med.
+# Lage en kolonne med fylkestilhørighet.
+datasett <- DATA %>%
+    filter(KJONN == 0, ALDER == "0_120") %>%
+    select(GEO, AAR, RATE) %>%
+    mutate(Geoniv = case_when(
+        as.numeric(GEO) > 30000 ~ "B",
+        as.numeric(GEO) > 100 & as.numeric(GEO) < 10000 ~ "K",
+        as.numeric(GEO) > 0 & as.numeric(GEO) < 81 ~ "F",
+        as.numeric(GEO) == 0 ~ "L" )
+    ) %>%
+    mutate(HJEMMEFYLKE = case_when(
+        Geoniv == "K" ~ stringr::str_sub(GEO, 1, 2),
+        Geoniv == "B" ~ str_sub(GEO, 1, 4))
+    )
+
+# Opprette en landstall-kolonne
+# Må ha tall by AAR, samme tall i mange rader.
+# Disse tallene er jo et subset. Jeg skiller dem ut, og joiner dem på!
+# - Rename-kommandoen er baklengs ift Stata.
+landstall <- filter(datasett, GEO == 0) %>%
+  rename(LANDET = RATE)
+
+# Join får med den ikke-spesifiserte GEO fra begge. Den fra 'landstall' (GEO.y) har 
+# bare "0" hele veien, og kan slettes. Tilsv. med Geoniv og HJEMMEFYLKE.
+datasett2 <- left_join(datasett, landstall, by = c("AAR")) %>%
+  select(-"GEO.y", -"Geoniv.y", -"HJEMMEFYLKE.y") %>%
+  rename(GEO = GEO.x, Geoniv = Geoniv.x, HJEMMEFYLKE = HJEMMEFYLKE.x)
+
+# Opprette en fylkestall-kolonne: ditto.
+fylker <- datasett %>%
+    filter(Geoniv == "F") %>% 
+    select(GEO, AAR, RATE) %>%
+    rename(FYLKESTALL = RATE)
+
+datasett2 <- left_join(datasett2, fylker, by = c("AAR", "HJEMMEFYLKE" = "GEO"))
+
+## MANGLER NÅ: 
+#   Å legge inn bykommunens tall i FYLKESTALL for bydelene.
+#   Joine på geonavn.
+#   Reshape long, så jeg kan bruke en variabel som _group_ i ggplot (og dermed få en legend).
+#   Lage en årstallvariabel med enkle tall "2018" å bruke som akselabels
+
+
+# FOR AD HOC_FIGUREN: 
+# Beholder bare én kommune å plotte for.
+plotdata <- datasett2 %>%
+    filter(GEO == 1813)   # 1813 Brønnøy
+
+```
+
+
+```{r plotting}
+# Med WIDE data
+ggplot(data = plotdata, aes(group = GEO)) +
+  geom_line(mapping = aes(x = AAR, y = RATE), color = "red", size = 1) +
+  geom_line(mapping = aes(x = AAR, y = FYLKESTALL), color = "blue",  size = 1) +
+  geom_line(mapping = aes(x = AAR, y = LANDET), color = "green", size = 1) +
+    labs(x = "År", y = "Befolkningsvekst (prosent)",
+       title = "Brønnøy") +
+    guides(x = guide_axis(angle = 90)) 
+    
+
+
+```
+
