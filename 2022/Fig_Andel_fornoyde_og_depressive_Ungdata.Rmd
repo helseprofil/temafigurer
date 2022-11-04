@@ -13,7 +13,7 @@ output:
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 
-De første ca 30 linjene (unntatt første chunk) er autogenerert da filen ble opprettet.
+De første ca 50 linjene (unntatt første chunk) er autogenerert da filen ble opprettet.
 
 ```{r}
 # Starte med blanke ark
@@ -61,9 +61,12 @@ Note that the `echo = FALSE` parameter was added to the code chunk to prevent pr
 
 Temafigur FHP-2022: UNGDATA, ANDEL MISFORNØYDE OG ANDEL MED DEPRESSIVE SYMPTOMER
 
+  (Dette ble bare øving: Jeg ble opptatt med en vanskelig inndatafil så lenge at
+  Hanna snappet alle figurene i 2022)
+
 Inndata: Kan ikke bruke Ferdig flatfil Indikator.txt. Der er den (ganske hårete) databehandlingen
 av Ungdatatall gjort ferdig, MEN den viser jo ikke tidslinje...
-Scripting gjøres med Git versjonskontroll, med remote repository på Github helseprofil/temafigs2022.
+Scripting gjøres med Git versjonskontroll, med remote repository på Github helseprofil/temafigurer/2022.
 RStudio vet om det, så jeg kan gi Git-kommandoer i Terminal-vinduet (som i Yusmans prosjekter).
 
 Kategorier:
@@ -250,25 +253,50 @@ landstall <- filter(datasett, GEO == 0) %>%
 # Join får med den ikke-spesifiserte GEO fra begge. Den fra 'landstall' (GEO.y) har 
 # bare "0" hele veien, og kan slettes.
 datasett2 <- left_join(datasett, landstall, by = c("AAR", "INDIKATOR")) %>%
-  select(-"GEO.y")
+  select(-"GEO.y") %>%
+  rename(GEO = GEO.x)
 
 
 ```
+Hvordan rename den gjenværende til bare "GEO"? Det burde kunne ligge i Select-delen?
+- egen Rename-kommando, som er baklengs ift. Stata.
+
 
 
 ```{r Kubefiler-Plott-første-forsøk}
 # Vi skal altså plotte MEIS vs. AAR for to indikatorer, separat for hver GEO:
-#   - tidslinje for landstallene (to linjer)
-#   - punkter for kommunetallene (to rekker)
+#   - tidslinje for landstallene i LANDET (to linjer)
+#   - punkter for kommunetallene i MEIS (to rekker)
+#   
+#   Starte med bare én GEO og ser om jeg får laget plott. 
+#   Lag en c(...) med to GEO og Loope over dem senere.
 
+plotdata <- datasett2 %>%
+  filter(GEO == "0301")
 
+ggplot(data = plotdata) +
+  geom_line(mapping = aes(x = AAR, y = LANDET, group = INDIKATOR, color = INDIKATOR), size = 2) +
+  geom_point(mapping = aes(x = AAR, y = MEIS, group = INDIKATOR, color = INDIKATOR), size = 5)
 
 ```
+KOMMENTARER
+Jeg testet i aes():
+- group = INDIKATOR   gir to svarte linjer (og ingen Legend, med Group må man bygge den selv.)
+- color = INDIKATOR   gir Legend med "rød linje er Depresjon" etc, men ingen synlige linjer i plottet.
+- prøvde å legge "color = INDIKATOR" utenfor selve aes(), men det ga feilmelding "object INDIKATOR not found".
+- "color = plotdata$INDIKATOR" utenfor aes(): ga "error: unknown color name 'fornoyd' "
+Slik tildeling må altså ligge som mapping (og det er vel logisk).
+- la "color = INDIKATOR" inni aes() etter "group...", og da virket det. To linjer med ulik farge, og en Legend.
 
 
 
 
 
+
+
+
+
+# Det nedenfor er fra Indikator.txt-metoden.
 
 ```{r INDIKATOR-txt-Prosessere-data-og-plotte-alt-FORSTE-FORSOK, eval=FALSE}
 ### MED INDIKATOR.TXT
