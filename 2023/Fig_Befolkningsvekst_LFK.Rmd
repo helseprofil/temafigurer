@@ -23,6 +23,7 @@ DATA <- read_delim("F:\\Forskningsprosjekter\\PDB 2455 - Helseprofiler og til_\\
 
 ```{r parametre}
 geonivaa <- "K"
+geomasterfil <- "F:\\Forskningsprosjekter\\PDB 2455 - Helseprofiler og til_\\Masterfiler\\2022\\Stedsnavn_SSB_TIL_GRAFER_Unicode.csv"
 
 ```
 
@@ -45,8 +46,9 @@ datasett <- DATA %>%
     mutate(HJEMMEFYLKE = case_when(
         Geoniv == "K" ~ stringr::str_sub(GEO, 1, 2),
         Geoniv == "B" ~ str_sub(GEO, 1, 4))
-    )
-
+    ) %>%
+    mutate(GEO = str_replace(GEO, "^0$", "00"))       # Sette inn "00" som landskode
+ 
 # Opprette en landstall-kolonne
 # Må ha tall by AAR, samme tall i mange rader.
 # Disse tallene er jo et subset. Jeg skiller dem ut, og joiner dem på!
@@ -70,20 +72,29 @@ datasett2 <- left_join(datasett2, fylker, by = c("AAR", "HJEMMEFYLKE" = "GEO"))
 
 ## MANGLER NÅ: 
 #   Å legge inn bykommunens tall i FYLKESTALL for bydelene.
-#   Joine på geonavn.
 #   Reshape long, så jeg kan bruke en variabel som _group_ i ggplot (og dermed få en legend).
 #   Lage en årstallvariabel med enkle tall "2018" å bruke som akselabels
 
 
+# Joine på geonavn fra masterfil (Kan etter hvert bruke geo-koder.accdb)
+# Se Ungdatafiguren (2022) for metode.
+geomaster <- read_delim(geomasterfil, delim = ";", locale = locale(decimal_mark = "."))
+
+datasett2 <- left_join(datasett2, geomaster, by = c("GEO" = "Sted_kode")) %>%
+    select(-"geo", -"GEO.y")
+
+datasett3 <- datasett2 %>%
+    pivot_longer(cols = c(3,6,7), names_to = "GEOLEVEL", values_to = "Prosent")
+
+```
+
+
+```{r plotting_wide, eval=FALSE}
 # FOR AD HOC_FIGUREN: 
 # Beholder bare én kommune å plotte for.
 plotdata <- datasett2 %>%
     filter(GEO == 1813)   # 1813 Brønnøy
 
-```
-
-
-```{r plotting}
 # Med WIDE data
 ggplot(data = plotdata, aes(group = GEO)) +
   geom_line(mapping = aes(x = AAR, y = RATE), color = "red", size = 1) +
@@ -95,5 +106,18 @@ ggplot(data = plotdata, aes(group = GEO)) +
     
 
 
+```
+
+
+```{r plotting_long}
+# FOR AD HOC_FIGUREN: 
+# Beholder bare én kommune å plotte for.
+plotdata <- datasett3 %>%
+    filter(GEO == 1813)   # 1813 Brønnøy
+
+# Med LONG data (kommandoen funker ikke ennå)
+ ggplot(data = plotdata, aes(group = GEO)) +
+      geom_line(mapping = aes(x = AAR, y = Prosent, colour = GEOLEVEL), size = 1) 
+#fig
 ```
 
