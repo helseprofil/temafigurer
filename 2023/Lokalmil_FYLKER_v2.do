@@ -38,6 +38,8 @@ Endringer/utvikling:
 	- 18.02.2019 (Lokalmiljø Ungdata)
 	
 	- 10.03.2023: Lagt i Git lokale repo/Temafigurer/2023.
+	- 13.03.2023: Lagt til at Hele landet kommer som egen søyle innen hvert fylke, og 
+	  tatt bort horisontal linje for landstallet.
 	
 */
 *===============================================================================
@@ -53,7 +55,7 @@ local profilaar ="2023"		//Henter Geomaster fra dette året.
 local geonivaa ="fylke"  //Tillatte verdier: "fylke" ("kommune", "bydel" ikke aktuelle her). 
 						  //OBS fylker bør styres separat, se toppen av grafløkka.
 						
-local fig_nr =6			//Bestemmer hvor på sidene figuren skal stå.
+local fig_nr =4			//Bestemmer hvor på sidene figuren skal stå.
 						//s.2 -> fig.1-2-3, s.3 -> fig.4-5-6.
 						//OBS: ER UAVHENGIG AV figurens nummer i profilteksten!
 						
@@ -102,9 +104,14 @@ keep if lpnr==`lokmilj'
 * Sjekker indik.tittel
 assert regexm(indikator, "lokalmilj") 
 keep if spraakid=="BOKMAAL"
-pause
-* Ta vare på landstallet: HER ER BARE ÉN VERDI for alle tre år!
+*exit
+* Ta vare på landstallet: HER SKAL VÆRE BARE ÉN VERDI for alle tre år!
+	//Post-covid er det separate landstall for hvert år, men de er temmelig like.
+	//- Til horisontal linje for Landet: bruk local.
+	//- Til søyle for landet inniblant kommunene: legge landstallet i kommunetall-kolonnen.
+	//  Det må trikses til lengre ned.
 local landstall = verdi_referansenivaa
+
 
 keep sted_kode indikator verdi_lavestegeonivaa datotag_side4_innfilutfil
 pause
@@ -114,7 +121,7 @@ merge 1:1 geo using "$geomaster"	//Innfører rader for fylker, bydeler og HReg.
 	*pause Etter merge geomaster
 drop if geo > 30000
 drop if geo > 54 & geo < 100
-drop if geo==0	//Beholder fylkene litt til
+*drop if geo==0	//Må beholde landet og fylkene
 drop _merge
 
 *------------------------------------------------------------------------
@@ -130,6 +137,17 @@ drop _merge
 	****Lage variabler med fylkestallene
 	gen hjemmefylke =int(geo/100) //nærmeste integer ved trunkering
 	replace hjemmefylke =geo if strlen(Sted_kode)==2 //Fylkene selv, og Hele landet.
+	
+	****Lage landstall som kan plottes inni hvert fylke
+	levelsof hjemmefylke if geo > 0 , local(f_liste)	//Telle fylker
+	local ant_fylker = wordcount("`f_liste'")
+	expand = `ant_fylker' if geo == 0					//Gir én landstall-rad for hvert fylke
+	replace verdi_lave = "`landstall'" if geo == 0		//Fyller inn verdien, til plottet
+	sort geo											//Legger Hele landet først
+	forvalues f = 1/`ant_fylker' {						//Tilordne fylkesangivelse til landstall-radene
+		replace hjemmefylke = real(word("`f_liste'", `f')) in `f'
+	}
+	replace geo = 1000 if geo == 0						//For å få landstallet sortert som en kommune
 
 *	gen fylkestall =rate if strlen(Sted_kode)==2
 	sort hjemmefylke geo //sikrer at selve fylket kommer først
@@ -153,6 +171,7 @@ global antall = r(N)
 gen radnr =_n	//løkkestyring
 
 *Finne første og siste rad i hvert fylke (til x-aksen)
+	//Disse tallene endres ikke av sorteringen til grafen i neste avsnitt.
 gen forsterad = radnr if hjemmefylke > hjemmefylke[_n-1]
 replace forsterad = 1 in 1 //Der virker ikke testen ovenfor
 replace forsterad = forsterad[_n-1] if forsterad == .
@@ -178,10 +197,10 @@ replace radnr = _n
 *    Må resette radnr, som brukes til labelling.
 *    _Antallet_ radnr per fylke er uendret, så forsterad og sisterad stemmer.
 *	 Men for å bevare fylket forrest med synkende sortering, må jeg trikse med tall.
-replace verdi_lave = "99999" if length(Sted_kode) == 2
+replace verdi_lave = "99999" if length(Sted_kode) == 2 & geo != 1000	//OBS unngå landstallet, 'geo 1000'.
 gsort hjemmefylke -verdi_lave	
 replace radnr = _n	
-replace verdi_lave = "" if length(Sted_kode) == 2
+replace verdi_lave = "" if length(Sted_kode) == 2 & geo != 1000			//ditto
  */
 
 
@@ -231,8 +250,8 @@ cd "`targetkatalog'"
 * SELVE FIGUREN
 *-----------------------------------------------------------------------
 * Søylefarge i hht. FHIs webpalett
-local kommunefarge "57 60 97"
-local landsfarge "152 179 39"
+local kommunefarge "46 161 192"
+local landsfarge "57 60 97"
 
 * Unicode-tegn for landslinja, til forklaringstekst
 local strek = ustrunescape("\u25AC")
@@ -246,7 +265,7 @@ local strek = ustrunescape("\u25AC")
 	*forvalues i=414/414 {	//Høylandet -TRL, kort søyle
 	*forvalues i=20/20 {		//Ski
 	
-	local start = 27		//Kjøre bare én graf
+	*local start = 29		//Kjøre bare én graf
 
 foreach i of local start {
 *local i=393 //for testing av graf
@@ -330,7 +349,7 @@ di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "
 	*Fylker	
 *	else if "`geonivaa'"=="fylke" {
 	graph twoway ///
-		(bar andel radnr if hjemmefylke==$hjemfylke & length(Sted_kode)>2 ,		/// 
+		(bar andel radnr if hjemmefylke==$hjemfylke & geo > 100 ,		/// Hoppe over selve fylket
 		color("`kommunefarge'") barwidth(0.8) 						///
 		ylabel(0(10)$ymax, angle(horizontal) valuelabel glcolor(gs12))	///		
 		ytitle("`yaksetekst'", size(medium) orientation(vertical)) ///
@@ -346,7 +365,7 @@ di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "
 		caption("Lokalmiljø: Indikator.txt, batchnr. `batchnr'", position(5) ring(5) size(vsmall) color(gs9) )	///
 		///text(`batchnr_yplass' `xmax' "`inndata'", 	///
 		///	placement(w) color(gs9) justification(left) size(vsmall)) ///
-		text(95 `normal_tekst_xplass' "{bf:`strek' Hele landet}", color(`landsfarge') size(medsmall) placement(west)) ///
+		/*text(95 `normal_tekst_xplass' "{bf:`strek' Hele landet}", color(`landsfarge') size(medsmall) placement(west))*/ ///
 		) ///
 		///(bar andel radnr if Sted_kode=="`nummer'",  /// Plotter bare aktuell kommune, i avvikende farge
 		///color("60 90 170") barwidth(0.8) 				/// og med kommunenavnet oppå søyla.
@@ -354,9 +373,12 @@ di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "
 		///) ///
 		(scatter datamangler radnr if hjemmefylke==$hjemfylke & length(Sted_kode)>2 , /// Setter på symbol der søyle mangler
 		msymbol(smcircle) msize(*`tekstskalering') mcolor(gs4) ///
+		) ///
+		(bar andel radnr if hjemmefylke==$hjemfylke & geo == 1000 ,		/// Landstallet som egen søyle
+		color("`landsfarge'") barwidth(0.8) 							///
 		)
-	gr_edit plotregion1.AddLine added_lines editor `xmin' `normal_linje' `xmax' `normal_linje'
-	gr_edit plotregion1.added_lines[1].style.editstyle  ///
+	*gr_edit plotregion1.AddLine added_lines editor `xmin' `normal_linje' `xmax' `normal_linje'
+	*gr_edit plotregion1.added_lines[1].style.editstyle  ///
 		linestyle( width(thick) color(`landsfarge') pattern(solid)) 
 *	}
 	*/
