@@ -281,7 +281,7 @@ foreach i of local start {
 di "local Fylkenavn rett etter fylling, i løkka: `fylkenavn' "	
 
 ****Aksetekster
-	local yaksetekst "Andel (prosent)"
+	local yaksetekst "Andel (prosent), standardisert"
 	*local yaksetekst "{bf:Andel (prosent)}"  //Bold
 	if "`geonivaa'" == "kommune" | "`geonivaa'" == "fylke" local xaksetekst "Kommunene i `fylkenavn'" 	
 	if "`geonivaa'" == "bydel" local xaksetekst "`fylkenavn'" 	//For bydel er "fylkenavn" hardkodet tekst.
