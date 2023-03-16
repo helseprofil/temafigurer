@@ -40,6 +40,7 @@ Endringer/utvikling:
 	- 10.03.2023: Lagt i Git lokale repo/Temafigurer/2023.
 	- 13.03.2023: Lagt til at Hele landet kommer som egen søyle innen hvert fylke, og 
 	  tatt bort horisontal linje for landstallet.
+	- 16.03.2023: Rettet fargekoder - gjenoppdaget at Stata gir andre farger enn R med de samme kodene.
 	
 */
 *===============================================================================
@@ -249,9 +250,9 @@ cd "`targetkatalog'"
 *-----------------------------------------------------------------------
 * SELVE FIGUREN
 *-----------------------------------------------------------------------
-* Søylefarge i hht. FHIs webpalett
-local kommunefarge "46 161 192"
-local landsfarge "57 60 97"
+* Søylefarge i hht. FHIs webpalett - kodene er tilnærmet så godt jeg kunne.
+local kommunefarge "35 149 186"					//Tilsv. palett: rgb "46 161 192", hex #2ea1c0
+local landsfarge "39 39 114*1.6"				//Tilsv. Palett: rgb "57 60 97", hex #393c61
 
 * Unicode-tegn for landslinja, til forklaringstekst
 local strek = ustrunescape("\u25AC")

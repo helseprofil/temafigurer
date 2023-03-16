@@ -90,10 +90,10 @@ global geomaster "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Maste
     */
 
 *UTDATA, FOR TESTING:
-local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/`profiltype'/`profilaar'/`geonivaa'\Temafigurer\TEST"
+*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/`profiltype'/`profilaar'/`geonivaa'\Temafigurer\TEST"
 
 *SKARP:
-*local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/`profiltype'/`profilaar'/`geonivaa'\Temafigurer\Lokalmiljo"
+local targetkatalog "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON\PRODUKTER\SSRS_filer/`profiltype'/`profilaar'/`geonivaa'\Temafigurer\Lokalmiljo"
 *===============================================================================
 
 * KJØRING:
