@@ -1,0 +1,526 @@
+---
+title: "Ungdatafigur 2026"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: true
+    toc_depth: 2
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: Hanna Helgeland
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE)
+#options(scipen = 2)
+options(digits = 2)
+options(scipen=999)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Start with clear environment
+rm(list = ls())
+
+# install pacman - a tool for easy installing and loading the other required packages
+if (!require("pacman")) install.packages("pacman")
+
+# use pacman to install - if needed, and load packages
+pacman::p_load(tidyverse, cowplot, Hmisc, ggpubr, scales, ggrepel)
+
+```
+
+O:/Prosjekt/FHP/
+C:/Users/HANN/OneDrive - Helsedirektoratet/
+
+## Functions
+
+local functions:
+  specify_decimal()
+  %notint%
+  select_prikk()
+  map_levels()
+```{r}
+source("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_scripts/local_functions.R")
+```
+
+
+## GEO  
+recent year ungdata
+```{r}
+stednavn_GEO_BKFL_GEO2024 <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/stednavn_GEO_BKFL_GEO2024.csv", delim = ";")
+
+jointable <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/jointable_multiplot_BYDEL.csv", delim = ";")
+
+recentyear_KH2026 <-  read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/recentyear_KH2026_KB.csv", delim = ";")
+```
+
+```{r}
+recentyear_KH2026 %>% 
+  group_by(AAR_end, GEO_type, completed) %>% 
+  count()
+```
+
+```{r}
+jointable
+```
+
+
+## Data
+ungdata indikatorer
+O:/Prosjekt/FHP/
+O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2025
+```{r}
+# select the right data
+#data_path <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2025/"  # path to the data
+#files_1 <- dir(data_path, pattern = ".*UNGD.*.csv") # get file names
+
+data_path <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/"  # path to the data
+files <- dir(data_path, pattern = ".*UNGDATA_20.*\\.csv") # get file names
+
+ungdata <- data_frame(filename = files) %>% # create a data frame
+                                         # holding the file names
+  mutate(file_contents = map(filename,          # read files into
+           ~ read_delim(file.path(data_path, .), delim = ";")) # a new data column
+        )  %>% 
+  unnest() %>% 
+  separate(filename, into = c("filgruppe"), sep = "_202", extra = "drop", remove = TRUE) %>%
+  mutate(filgruppe = gsub("_UNGD.*", "", filgruppe)) %>%
+  separate(AAR, into = c("AAR_start", "AAR_end"), sep = "_", remove = FALSE) %>% 
+  mutate_at(c("GEO", "AAR_start", "AAR_end"), as.integer) %>% 
+  left_join(., stednavn_GEO_BKFL_GEO2024)
+
+```
+
+```{r}
+map_levels_bycols(ungdata, bycols = "filgruppe")
+```
+```{r}
+ungdata %>% 
+  count(filgruppe, KJONN, SOES)
+```
+
+
+
+# colors
+
+FHI colors
+```{r}
+fhiblue3 <- "#393c61"
+fhiblue2 <- "#0975B5"
+fhiblue2b <- "#0580A7"
+fhiblue1 <- "#2EA1C0"
+fhiblue1b <- "#65ADC3"
+fhigrey <- "#A9B7BF"
+fhigreen <- "#709900"
+fhidarkgreen <- "#4d7e13"
+fhilightgreen <- "#aed267"
+fhilightgreenman <- "#a2c24c"
+fhired <- "#B11643"
+fhicoral <- "#FC5F56"
+fhiyellow <- "#F7B500"
+
+show_col(c(fhiblue1, fhiblue2, fhiblue3,
+           fhigrey, fhigreen, fhiblue3,
+           fhired, fhicoral, fhiyellow),
+         ncol = 3)
+
+ungcolors <- c(fhigreen, fhiblue2, fhiblue1b, fhiblue3, fhiyellow, fhired)
+show_col(ungcolors)
+
+show_col(c(fhiblue3, fhiblue2, fhilightgreen,
+           fhiblue3, fhiblue2b, fhilightgreen,
+           fhiblue3, fhiblue2, fhiblue1b), 
+         ncol = 3)
+
+colors_LKB <- c(fhiblue3, fhiblue2, fhiblue1b)
+show_col(colors_LKB, ncol = 3)
+
+colors_KB <- c(fhiblue2, fhilightgreen)
+colors_KB <- c(fhiblue2, fhiblue1b)
+show_col(colors_KB, ncol = 3)
+
+```
+
+# Ungdata prep
+
+```{r}
+names(ungdata)
+```
+
+```{r}
+map_levels(ungdata)
+```
+
+
+## Select indikators and filtering
+
+```{r}
+ungdata_prep <- ungdata %>% 
+  filter(grepl("ROYK|SNUS|VAPE|HASJ|NARKOBRUK|ALKO", filgruppe),
+         SOES == 0,
+         ) %>% 
+  
+  mutate(kjonn_text = case_when(KJONN == 0 ~ "Total",
+                                KJONN == 1 ~ "Gutter",
+                                KJONN == 2 ~ "Jenter"),
+         soes_text = case_when(SOES == 0 ~ "Total",
+                               SOES == 1 ~ "Lav",
+                               SOES == 2 ~ "Middels",
+                               SOES == 3 ~ "Høy"))
+
+```
+
+
+# Overview plot hele landet + kjønn
+
+```{r fig.height=5, fig.width=7}
+min_max <- minmax(ungdata_prep)
+
+ungdata_prep %>% 
+  filter(GEO == 0,
+         SOES %notin% c(1:3)) %>% 
+  ggplot(aes(x = AAR_end,
+             y = MEIS,
+             color = kjonn_text,
+             group = interaction(kjonn_text, filgruppe)),
+             ) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min_max$min_aar, min_max$max_aar, 2)) +
+  scale_color_manual(values = c("Total" = fhigrey, "Gutter" = fhiblue2, "Jenter" = fhired)) +
+  theme(legend.position = "bottom") +
+  facet_wrap(~filgruppe, scales = "free_y") +
+  labs(title = "Ungdataindikatorer - utvikling over tid",
+       subtitle = "Landsgjennomsnitt",
+       y = "Andel(%), standardisert", 
+       x = "År")
+#ggsave("plots/Rusindikatorer_overtid_kjonn.png", height = 6, width = 9)
+```
+
+
+## PLOT TEST
+
+
+```{r}
+ungdata_recentyear_bydel_plot <- left_join(jointable, ungdata_prep) %>% 
+  filter(GEO_type %in% c("land", "bydel", "kommune")) %>% 
+    right_join(recentyear_KH2026 %>% 
+                 filter(GEO_type == "bydel") %>% 
+               transmute(plotid = GEO, AAR_end)) %>% 
+  mutate(prikk = ifelse(is.na(MEIS), 1, NA_real_)) %>% 
+  mutate(label_ungdata = paste0("Ungdata ", AAR_end),
+         label_kilde = paste0("Kilde: Ungdata (", AAR_end, ")")) %>% 
+  mutate(plotid = ifelse(grepl("^301", plotid), paste0("0", plotid), plotid),                # ensure 4 digit Oslo geo code
+         Sted = case_when(GEO == 301 ~ paste0(Sted, " (kommune)"),      # separate Oslo fylke and kommune
+                          GEO == 3 ~ paste0(Sted, " (fylke)"),
+                          TRUE ~ Sted)) %>% 
+  mutate(varorder = case_when(grepl("ROYK", filgruppe) ~ 1,
+                             grepl("SNUS", filgruppe) ~ 2,
+                             grepl("VAPE", filgruppe) ~ 3,
+                             grepl("ALKOHOL", filgruppe) ~ 6,
+                             grepl("HASJBRUK", filgruppe) ~ 4,
+                             grepl("ANDRENARKO", filgruppe) ~ 5,
+                             TRUE ~ NA_real_
+                             ),
+        vartext = case_when(grepl("ROYK", filgruppe) ~ "Røyker \nukentlig/daglig",
+                               grepl("SNUS", filgruppe) ~ "Snuser \nukentlig/daglig",
+                               grepl("VAPE", filgruppe) ~ "Vaper \nukentlig/daglig",
+                               grepl("ALKOHOL", filgruppe) ~ "Har vært \nberuset på alkohol",
+                               grepl("HASJBRUK", filgruppe) ~ "Har prøvd \nhasj/cannabis",
+                               grepl("ANDRENARKO", filgruppe) ~ "Har prøvd andre \nnarkotiske stoff",
+                               ))
+
+```
+
+
+## snus, vape, røyk
+
+```{r}
+nikotin_bydel_plot <- ungdata_recentyear_bydel_plot %>% 
+  filter(grepl("SNUS|ROYK|VAPE", filgruppe))
+```
+
+
+
+FHI colors
+```{r}
+fhiblue3 <- "#393c61"
+fhiblue2 <- "#0975B5"
+fhiblue2b <- "#0580A7"
+fhiblue1 <- "#2EA1C0"
+fhiblue1b <- "#65ADC3"
+fhigrey <- "#A9B7BF"
+fhigreen <- "#709900"
+fhidarkgreen <- "#4d7e13"
+fhilightgreen <- "#aed267"
+fhilightgreenman <- "#a2c24c"
+fhired <- "#B11643"
+fhicoral <- "#FC5F56"
+fhiyellow <- "#F7B500"
+
+show_col(c(fhiblue1, fhiblue2, fhiblue3,
+           fhigrey, fhigreen, fhiblue3,
+           fhired, fhicoral, fhiyellow),
+         ncol = 3)
+
+ungcolors <- c(fhigreen, fhiblue2, fhiblue1b, fhiblue3, fhiyellow, fhired)
+show_col(ungcolors)
+
+#09679e
+#65a878
+#65a6a8
+#54818a
+fhiblue2b
+show_col(c(fhiblue3, fhiblue2, fhilightgreen,
+           fhiblue3, "#65a878", fhilightgreen,
+           fhiblue3, "#65a6a8", fhilightgreen,
+           fhiblue3, fhiblue2b, fhilightgreen,
+           fhiblue3, fhiblue1, fhilightgreenman,
+           fhiblue3, fhiblue2, fhilightgreen,
+           fhiblue3, "#09679e", "#76c0d6"), 
+         ncol = 3)
+
+colors_LKB <- c(fhiblue3, fhiblue1, fhilightgreenman)
+colors_LKB <- c(fhiblue3, fhiblue2, fhiblue1b)
+show_col(colors_LKB, ncol = 3)
+
+colors_KB <- c(fhiblue2, fhilightgreen)
+colors_KB <- c(fhiblue2, fhiblue1b)
+show_col(colors_KB, ncol = 3)
+
+```
+"#76c0d6"
+
+```{r fig.height=5, fig.width=7}
+#colors_KB <- c(fhiblue2, fhilightgreen)
+colors_KB <- c(fhiblue2, fhiblue1b)
+colors_KB <- c("#09679e", fhiblue1b)
+colors_KB <- c(fhiblue2, "#76c0d6")
+colors_KB <- c(fhiblue2, fhilightgreen)
+colors_LK <- c(fhiblue3, fhiblue1b)
+colors_KB <- c(fhiblue2b, fhilightgreen)
+colors_LKB <- c(fhiblue3, fhiblue2b, fhilightgreen)
+
+ylab <- "Prosent ungdomsskoleelever, standardisert"
+
+label <- nikotin_bydel_plot %>% 
+  filter(plotid == 500101) %>% 
+  pull(label_kilde)
+
+nikotin_bydel_plot %>% 
+  filter(plotid == 500101,
+         GEO_type %in% c("bydel", "kommune", "land")) %>%
+  ggplot(aes(x = kjonn_text, y = MEIS, fill = reorder(Sted, plotorder))) +
+  geom_col(position = position_dodge(),
+           width = 0.7) +
+  geom_text(aes(label = round(MEIS, 0)),
+              position = position_dodge(width = 0.7),
+              vjust = -1,
+              size = 4.2,
+              ) +
+  scale_fill_manual(values = colors_LKB) +
+  #scale_fill_manual(values = c("Total" = fhigrey, "Gutter" = fhiblue2, "Jenter" = fhired)) +
+  scale_y_continuous(limits = c(0,20)) +
+  facet_wrap(~reorder(vartext, varorder)) +
+  labs(y = ylab,
+       x = "",
+       fill = "",
+       caption = label[1],
+       ) +
+  theme_cowplot() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
+        legend.position = "bottom",
+        axis.title.x = element_blank(),
+        )
+#ggsave("plots/nikotin_kjonn_landet_sted.png", height = 5, width = 7, bg = "white")
+```
+
+
+# MULTIPLOT
+
+```{r}
+metadata <- sub(pattern = ".csv", "", basename(files)[grepl("ROYK|SNUS|VAPE", basename(files))])
+
+label_metadata <- paste0(metadata, collapse = ", ")
+label_metadata
+
+```
+
+```{r}
+min_max <- minmax(nikotin_bydel_plot)
+min_max
+
+nikotin_bydel_plot %>% 
+  group_by(filgruppe) %>% 
+  minmax(.)
+
+```
+
+```{r}
+missing <- select_prikk(nikotin_bydel_plot, GEO_type = "bydel")
+missing
+```
+
+
+```{r fig.height=5, fig.width=7}
+
+x_text_size <- 12.5
+y_text_size <- 12
+axis_title_size <- 14
+legend_size <- 14
+stripsize <- 14
+dodgewidth <- 0.75
+#ymax <- min_max$max_meis+2
+ymax <- 30
+ylab <- "Prosent ungdomsskoleelever, standardisert"
+kildelab <- "Kilde: SSB"
+colors_KB <- c(fhiblue2b, fhilightgreen)
+colors_LKB <- c(fhiblue3, fhiblue2b, fhilightgreen)
+
+
+theme_OVP <- theme_cowplot() +
+    theme(legend.position = "bottom",
+          legend.text = element_text(size = legend_size),
+          legend.margin=margin(t=-6),
+          axis.title.x = element_blank(),
+          axis.text.x = element_text(size = x_text_size,
+                                     #angle = 45, hjust = 1,
+                                     ),
+          axis.text.y = element_text(size = y_text_size),
+          axis.title.y = element_text(size = axis_title_size),
+          strip.background = element_blank(),
+          strip.text = element_text(size = stripsize),
+          line = element_blank(),
+          axis.ticks.y = element_line(color = "grey50"),
+          panel.border = element_rect(fill = NA, color = "grey50"),
+          plot.caption = element_text(hjust=c(0,1), size = c(5,10), color = c("grey50", "black")),
+          plot.margin = margin(t = 2, r = 5, b = 2, l = 5),
+          panel.background = element_rect(color = "white"), 
+          )
+
+#misstext <- "Manglende eller \nanonymiserte tall"
+#misstext <- "Manglende eller \nutilstrekkelig tallgrunnlag"
+misstext <- "Manglende eller    \nfor lite tallgrunnlag"
+
+do_plot <- function(data, include_missing = FALSE) {  # default is missing FALSE, no need to speficy
+    
+    # Hent label_kilde
+  label_kilde <- data %>% pull(label_kilde) %>% unique()
+  
+    p <- data %>% 
+  filter(GEO_type %in% c("bydel", "kommune", "land")) %>%
+  ggplot(aes(x = kjonn_text, 
+             y = MEIS, 
+             fill = reorder(Sted, plotorder))) +
+  geom_col(width = 0.7,
+           position = position_dodge(width = dodgewidth)) +
+  geom_text(aes(label = round(MEIS, 0)),
+              position = position_dodge(width = dodgewidth),
+              vjust = -0.5,
+              size = 4.2,
+              ) +
+  #scale_fill_manual(values = colors_KB) +
+  scale_fill_manual(values = colors_LKB) +
+  scale_y_continuous(breaks = seq(0,100,5),
+                       limits = c(0,ymax+1), expand = expansion(mult = c(0, 0))) +
+  facet_wrap(~reorder(vartext, varorder)) +
+  labs(y = ylab,
+       x = "",
+       fill = "",
+       caption = c(label_metadata, label_kilde),
+       ) +
+  theme_cowplot() +
+  theme_OVP
+  
+   
+   # If missing values should be visualized, add these layers
+  if (include_missing) {
+    
+    facet_missing <- data %>% 
+      filter(!is.na(prikk))
+    
+    p <- p +
+      geom_point(aes(y = prikk,
+                     group = interaction(reorder(Sted, plotorder), kjonn_text),
+                     ), 
+                 color = "black", size = 4.1,
+                 position = position_dodge(width = dodgewidth),
+                 show.legend = FALSE) +
+       geom_text(data = facet_missing,
+              aes(label = misstext,
+                  ),
+                 x = 2,
+                 y = ymax-2,
+                 size = 3.9,
+                 check_overlap = TRUE,
+                 inherit.aes = FALSE) +
+       geom_point(data = facet_missing,
+              #aes(group = group),
+                  x = 0.80, y = ymax-1.15,
+                  size = 3.9,
+                  inherit.aes = FALSE)
+  }
+  
+  return(p)
+}
+
+nikotin_bydel_plot %>% 
+  filter(plotid == "030101") %>% 
+  do_plot(., include_missing = FALSE)
+ggsave("plots/Figur2_nikotin_bydel.png", height = 5, width = 7, bg = "white")
+
+nikotin_bydel_plot %>%
+  filter(plotid == "030103") %>%
+  do_plot(., include_missing = TRUE)
+ggsave("plots/Figur2_nikotin_bydel_missing.png", height = 5, width = 7, bg = "white")
+```
+
+
+
+## Missing
+
+```{r}
+missing <- select_prikk(nikotin_bydel_plot, GEO_type = "bydel")
+
+length(missing)
+missing
+```
+
+```{r}
+# Figure directory name and figure position
+dirname <- "Figure2_BYDEL"
+figposnr <- "3"
+
+
+# Generate plots without missing values
+plots <- nikotin_bydel_plot %>%
+  filter(!plotid %in% missing) %>%  # Exclude missing-value plots
+  split(.$plotid) %>%
+  map(~do_plot(., include_missing = FALSE))  # Normal plot
+
+# Generate plots with missing values
+plots_prikk <- nikotin_bydel_plot %>%
+  filter(plotid %in% missing) %>%  # Only include missing-value plots
+  split(.$plotid) %>%
+  map(~do_plot(., include_missing = TRUE))  # Include missing-value markers
+
+# Combine both lists of plots
+all_plots <- c(plots, plots_prikk)
+
+# Generate file paths using `outdir` and `figposnr`
+paths <- stringr::str_c(names(all_plots), "_", figposnr, "_tema", ".png")
+
+# Create the output directory based on `outdir`
+res_dir <- paste0("plots/", dirname)
+dir.create(res_dir, recursive = TRUE)
+
+# Save plots
+pwalk(list(paths, all_plots), ~ggsave(filename = .x, plot = .y, 
+                                      height = 5, width = 7, dpi = 200, bg = "white", 
+                                      path = res_dir))
+
+length(all_plots)
+```
+
+
+#######
+

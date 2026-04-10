@@ -1,0 +1,439 @@
+---
+title: "Ungdata - ungdomsskole + videregående rus + nikotin"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: true
+    toc_depth: 2
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: Hanna Helgeland
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE)
+#options(scipen = 2)
+options(digits = 2)
+options(scipen=999)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Start with clear environment
+rm(list = ls())
+
+# install pacman - a tool for easy installing and loading the other required packages
+if (!require("pacman")) install.packages("pacman")
+
+# use pacman to install - if needed, and load packages
+pacman::p_load(tidyverse, cowplot, Hmisc, ggpubr, scales, ggrepel)
+
+```
+
+O:/Prosjekt/FHP/
+C:/Users/HANN/OneDrive - Helsedirektoratet/
+
+## Functions
+
+local functions:
+  specify_decimal()
+  %notint%
+  select_prikk()
+  map_levels()
+```{r}
+source("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_scripts/local_functions.R")
+```
+
+```{r}
+fhiblue3 <- "#393c61"
+fhiblue2 <- "#0975B5"
+fhiblue2b <- "#0580A7"
+fhiblue1 <- "#2EA1C0"
+fhiblue1b <- "#65ADC3"
+fhigrey <- "#A9B7BF"
+fhigreen <- "#709900"
+fhidarkgreen <- "#4d7e13"
+fhilightgreen <- "#aed267"
+fhilightgreenman <- "#a2c24c"
+fhired <- "#B11643"
+fhicoral <- "#FC5F56"
+fhiyellow <- "#F7B500"
+
+show_col(c(fhiblue1, fhiblue2, fhiblue3,
+           fhigrey, fhigreen, fhiblue3,
+           fhired, fhicoral, fhiyellow),
+         ncol = 3)
+
+```
+
+
+## GEO  
+recent year ungdata
+```{r}
+stednavn_GEO_BKFL_GEO2024 <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/stednavn_GEO_BKFL_GEO2024.csv", delim = ";")
+
+recentyear_KH2026 <-  read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/recentyear_KH2026_KB.csv", delim = ";")
+
+jointable <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/jointable_multiplot_GEO2024.csv", delim = ";")
+
+```
+
+
+```{r}
+jointable
+```
+
+```{r}
+recentyear_KH2026
+```
+
+
+# Data
+
+## Data ungdomsskole
+
+```{r}
+
+data_path <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/"  # path to the data
+files <- dir(data_path, pattern = ".*UNGDATA_20.*\\.csv") # get file names
+
+uskole <- data_frame(filename = files) %>% # create a data frame
+                                         # holding the file names
+  mutate(file_contents = map(filename,          # read files into
+           ~ read_delim(file.path(data_path, .), delim = ";")) # a new data column
+        )  %>% 
+  unnest() %>% 
+  separate(filename, into = c("filgruppe"), sep = "_202", extra = "drop", remove = TRUE) %>%
+  mutate(filgruppe = gsub("_UNGD.*", "", filgruppe)) %>%
+  separate(AAR, into = c("AAR_start", "AAR_end"), sep = "_", remove = FALSE) %>% 
+  mutate_at(c("GEO", "AAR_start", "AAR_end"), as.integer) %>% 
+  left_join(., stednavn_GEO_BKFL_GEO2024)
+
+metadata_uskole <- sub(pattern = ".csv", "", basename(files)[grepl("ROYK|SNUS|VAPE|HASJBRUK|ANDRENARKO|ALKO", basename(files))])
+
+```
+
+
+```{r}
+uskole_prep <- uskole %>% 
+  filter(grepl("ALKO|HASJBRUK|NARKO|VAPE|ROYK|SNUS", filgruppe),
+         SOES == 0,
+         ) %>% 
+  select(-c(DEPRESJON, FORNOYDHET, NIVA_PLAGET, HARVENN, DELTARNAA, LOKALTILBUD, LIVSKVALITET, REGELBRUDD, SKJERMTID, STATUS))
+```
+
+```{r}
+map_levels_bycols(uskole_prep, bycols = "filgruppe")
+```
+## Data videregående
+
+OBS!! ikke godkjente kuber (enda)
+
+```{r}
+
+data_path <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/"  # path to the data
+files <- dir(data_path, pattern = ".*UNGDATA_VGO.*.csv")
+
+vgo <- data_frame(filename = files) %>% # create a data frame
+                                         # holding the file names
+  mutate(file_contents = map(filename,          # read files into
+           ~ read_delim(file.path(data_path, .), delim = ";")) # a new data column
+        )  %>% 
+  unnest() %>% 
+  separate(filename, into = c("filgruppe"), sep = "_202", extra = "drop", remove = TRUE) %>%
+  mutate(filgruppe = gsub("_UNGD.*", "", filgruppe)) %>%
+  separate(AAR, into = c("AAR_start", "AAR_end"), sep = "_", remove = FALSE) %>% 
+  mutate_at(c("GEO", "AAR_start", "AAR_end"), as.integer) %>% 
+  left_join(., stednavn_GEO_BKFL_GEO2024)
+
+metadata_vgo <- sub(pattern = ".csv", "", basename(files)[grepl("ROYK|SNUS|VAPE|HASJBRUK|ANDRENARKO", basename(files))])
+
+```
+
+```{r}
+map_levels_bycols(vgo, bycols = "filgruppe")
+```
+## Bind
+```{r}
+names(uskole_prep)
+names(vgo)
+
+uskolevgo <- rbind(uskole_prep %>% 
+                     mutate(ALDER = "Ungdomsskole"), 
+                   vgo %>% 
+                     mutate(ALDER = "Videregående"))
+
+```
+
+```{r}
+
+metadata <- c(metadata_uskole, metadata_vgo)
+
+```
+
+
+# Plot
+
+REMOVE UNGDOMSSKOLE ANDRENARKO < 2021 !!!!
+
+```{r}
+uskolevgo_plot <- uskolevgo %>% 
+  filter(KJONN %in% c(1,2),
+         SOES == 0,
+         GEO == 0, 
+         AAR_end >= 2015) %>% 
+    mutate(MEIS = ifelse(filgruppe == "ANDRENARKO" & ALDER == "Ungdomsskole" & AAR_end < 2021, NA_real_, MEIS),
+           kjonn_text = case_when(KJONN == 0 ~ "Total",
+                                KJONN == 1 ~ "Gutter",
+                                KJONN == 2 ~ "Jenter"),
+           vartext = case_when(grepl("ROYK", filgruppe) ~ "Bruker røyk \nukentlig/daglig",
+                               grepl("SNUS", filgruppe) ~ "Bruker snus \nukentlig/daglig",
+                               grepl("VAPE", filgruppe) ~ "Bruker vape \nukentlig/daglig",
+                               grepl("ALKOHOL", filgruppe) ~ "Har vært \nberuset på alkohol",
+                               grepl("HASJBRUK", filgruppe) ~ "Har brukt \nhasj/cannabis",
+                               grepl("ANDRENARKO", filgruppe) ~ "Har brukt andre \nnarkotiske stoff",
+                               ),
+           alder_aar = case_when(ALDER == "Ungdomsskole" ~ paste0(ALDER, " (13-16 år)"),
+                                 ALDER == "Videregående" ~ paste0(ALDER, " (16-19 år)")),
+           group = interaction(alder_aar, kjonn_text, sep = ", "),
+           )
+```
+
+```{r}
+uskolevgo_plot %>% 
+  map_levels()
+
+uskolevgo_plot %>% 
+  count(group, alder_aar, ALDER, kjonn_text)
+```
+
+
+(alle) Rusmidler + nikotin
+```{r fig.height=5, fig.width=7}
+
+# set text size
+title_size <- 14
+y_title_size <- 14      
+y_text_size  <- 11      
+x_text_size  <- 10
+facet_title_size <- 13.5
+legend_size  <- 14  
+label_size   <- 3.5
+ymax <- 25
+ylab <- "Prosent ungdom, standardisert"
+
+theme_facetline <- theme(axis.title.x = element_blank(),
+                         axis.title.y = element_text(size = y_title_size),
+                         legend.text = element_text(size = legend_size),
+                          legend.position = "bottom",
+                          legend.title = element_blank(),
+                         legend.box.spacing = unit(0.2, "cm"),
+                         legend.key.spacing = unit(0.1, "cm"),
+                         strip.text = element_text(size = facet_title_size),
+                         strip.background = element_rect(fill = "white"), 
+                          panel.background = element_rect(color = "white"), 
+                          panel.border = element_rect(linetype = "solid", fill = NA, color = "black"),
+                         panel.spacing = unit(0.1, "lines"),
+                          plot.background = element_rect(fill = "white"),
+                          plot.margin = margin(t = 1, r = 10, b = 0, l = 0, unit = "pt"),
+                          panel.grid.major.x = element_line(color = "grey", size = 0.1, linetype = 1),
+                          panel.grid.minor.x = element_line(color = "grey", size = 0.1, linetype = 2),
+                          panel.grid.major.y = element_line(color = "grey", size = 0.1, linetype = 1),
+                          panel.grid.minor.y = element_line(color = "grey", size = 0.1, linetype = 2),
+        )
+
+uskolevgo_plot %>%
+  filter(!is.na(MEIS)) %>% 
+  ggplot(aes(x = AAR_end,
+             y = MEIS,
+             color = group,
+             group = interaction(group, filgruppe)),
+             ) +
+  geom_line(size = 1.3) +
+  #geom_point(size = 1.5) +
+  annotate("rect", xmin = 2020.4, xmax = 2021.6, ymin = 0, ymax = ymax, alpha = 0.1, fill = "grey20") +
+  annotate("text", x = 2021, y = 23.5, label = "COV19", size = 2, color = "grey30") +
+#scale_x_continuous(breaks = seq(minmaxAAR$min, minmaxAAR$max, 2)) +
+  scale_color_manual(values = c(fhiblue2, fhiblue3, fhicoral, fhired)) +
+  scale_x_continuous(breaks = seq(2017, 2025, 4)) +
+  scale_y_continuous(limits = c(0,ymax), expand = c(0,0)) +
+  #facet_wrap(~vartext, scales = "free") +
+  facet_wrap(~vartext) +
+  labs(y = ylab) +
+  theme_cowplot() +
+  theme_facetline +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+ggsave("plots/Figur1_uskole_vgo_rusnikotin.png", height = 5, width = 7)
+```
+O:/Prosjekt/FHP/PRODUKSJON/VALIDERING/Temafigurer
+```{r}
+metadata
+write_delim(as.data.frame(metadata), "plots/OVP2026_Figur1_Kuber_metadata.txt", delim = "\n")
+write_delim(as.data.frame(metadata), "O:/Prosjekt/FHP/PRODUKSJON/VALIDERING/Temafigurer/OVP2026_Figur1_Kuber_metadata.txt", delim = "\n")
+```
+
+
+
+####################
+
+```{r fig.height=5, fig.width=7}
+uskolevgo_plot %>%
+  filter(!is.na(MEIS)) %>% 
+  ggplot(aes(x = AAR_end,
+             y = MEIS,
+             color = group,
+             group = interaction(group, filgruppe)),
+             ) +
+  geom_line() +
+  geom_point() +
+  #scale_x_continuous(breaks = seq(minmaxAAR$min, minmaxAAR$max, 2)) +
+  scale_color_manual(values = c(fhiblue2, fhiblue3, fhicoral, fhired)) +
+  scale_x_continuous(breaks = seq(2013, 2025, 4)) +
+  facet_wrap(~vartext, scales = "free_y") +
+  labs(y = "Andel ungdom i prosent") +
+  theme_cowplot() +
+  theme(axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        panel.background = element_rect(color = "white"), 
+        panel.border = element_rect(linetype = "solid", fill = NA, color = "black"),
+        plot.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_line(color = "grey", size = 0.1, linetype = 1),
+        panel.grid.minor.x = element_line(color = "grey", size = 0.1, linetype = 2),
+        panel.grid.major.y = element_line(color = "grey", size = 0.1, linetype = 1),
+        panel.grid.minor.y = element_line(color = "grey", size = 0.1, linetype = 2),
+        ) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+#ggsave("plots/uskole_vgo_rusnik_tid.png", height = 5, width = 7)
+```
+
+
+Trying to set two different y limits
+```{r}
+
+# Build a named vector for labeller: names = filgruppe codes, values = vartext
+label_map <- uskolevgo_plot %>%
+  distinct(filgruppe, vartext) %>%
+  { setNames(.$vartext, .$filgruppe) }
+
+uskolevgo_plot %>%
+  ggplot(aes(x = AAR_end,
+             y = MEIS,
+             color = group,
+             group = interaction(group, filgruppe))) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = seq(2013, 2025, 4)) +
+  scale_color_manual(values = c(fhiblue2, fhiblue3, fhicoral, fhired)) +
+  facet_wrap(~ filgruppe, labeller = labeller(filgruppe = label_map)) +
+  facetted_pos_scales(
+    y = list(
+      vars(filgruppe == "ALKOHOL") ~ scale_y_continuous(limits = c(0, 65)),
+      vars(filgruppe != "ALKOHOL") ~ scale_y_continuous(limits = c(0, 22))
+    )
+  ) +
+  labs(y = "Andel ungdom i prosent") +
+  theme_cowplot() +
+  theme(axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        panel.background = element_rect(color = "white"), 
+        panel.border = element_rect(linetype = "solid", fill = NA, color = "black"),
+        plot.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_line(color = "grey", size = 0.1, linetype = 1),
+        panel.grid.minor.x = element_line(color = "grey", size = 0.1, linetype = 2),
+        panel.grid.major.y = element_line(color = "grey", size = 0.1, linetype = 1),
+        panel.grid.minor.y = element_line(color = "grey", size = 0.1, linetype = 2),
+        ) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+```
+
+
+```{r fig.height=5, fig.width=7}
+uskolevgo_plot %>% 
+  filter(grepl("HASJ|NARKO|SNUS|VAPE", filgruppe)) %>% 
+  ggplot(aes(x = AAR_end,
+             y = MEIS,
+             color = group,
+             group = interaction(group, filgruppe)),
+             ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = seq(minmaxAAR$min, minmaxAAR$max, 2)) +
+  scale_color_manual(values = c(fhiblue2, fhiblue3, fhicoral, fhired)) +
+  scale_x_continuous(breaks = seq(2013, 2025, 2)) +
+  scale_y_continuous(limits = c(0,24)) +
+  facet_wrap(~vartext, scales = "free_y") +
+  labs(y = "Andel ungdom i prosent") +
+  theme_cowplot() +
+  theme(axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        panel.background = element_rect(color = "white"), 
+        panel.border = element_rect(linetype = "solid", fill = NA, color = "black"),
+        plot.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_line(color = "grey", size = 0.1, linetype = 1),
+        panel.grid.minor.x = element_line(color = "grey", size = 0.1, linetype = 2),
+        panel.grid.major.y = element_line(color = "grey", size = 0.1, linetype = 1),
+        panel.grid.minor.y = element_line(color = "grey", size = 0.1, linetype = 2),
+        ) +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+ggsave("plots/uskole_vgo_narkonicotin_tid.png", height = 5, width = 7)
+```
+
+```{r}
+
+```
+
+
+
+
+```{r}
+uskolevgo_plot %>% 
+  group_by(filgruppe, ALDER) %>% 
+  minmax(.)
+```
+
+
+```{r}
+vgo %>% 
+  arrange(-MEIS)
+```
+
+
+```{r}
+vgo %>% 
+  filter(GEO == 3,
+         SOES == 0) %>% 
+  select(filgruppe, GEO, AAR, KJONN, SOES, MEIS) %>% 
+  arrange(filgruppe, KJONN, AAR)
+```
+
+```{r}
+vgo %>% 
+  filter(GEO == 0,
+         SOES == 0) %>% 
+  select(filgruppe, GEO, AAR, KJONN, SOES, MEIS) %>% 
+  arrange(filgruppe, KJONN, AAR)
+```
+
+```{r fig.height=6, fig.width=10}
+vgo %>% 
+  filter(GEO == 0,
+         SOES == 0) %>% 
+  ggplot(aes(x = AAR_end,
+             y = MEIS,
+             color = as.factor(KJONN))) +
+  geom_line(size = 2) +
+  scale_x_continuous(breaks = c(seq(2016, 2025, 2))) +
+  theme(legend.position = "bottom") +
+  facet_wrap(~filgruppe)
+```
+
+```{r}
+map_levels(uskolevgo_plot)
+```
+
+
+
+
+
