@@ -1,0 +1,392 @@
+---
+title: "Figur 4 - Sykefravær"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: true
+    toc_depth: 2
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: Hanna Helgeland
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Start with clear environment
+rm(list = ls())
+
+# install pacman - a tool for easy installing and loading the other required packages
+if (!require("pacman")) install.packages("pacman")
+
+# use pacman to install - if needed, and load packages
+pacman::p_load(tidyverse, cowplot, Hmisc, ggpubr, scales, ggbeeswarm)
+
+```
+
+
+Figur 4: 
+Sykefravær, legemeldt (linjediagram)
+etter kjønn
+
+
+
+## Functions
+
+local functions:
+  specify_decimal()
+  %notin%
+  select_prikk()
+  map_levels()
+  minmax()
+```{r}
+source("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_scripts/local_functions.R")
+```
+
+## Data
+
+GEO
+Jointable
+recent year
+
+C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data
+```{r}
+stednavn_GEO_BKFL <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/stednavn_GEO_BKFL_GEO2024.csv", delim = ";")
+
+jointable <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/jointable_multiplot_fylke_2024.csv", delim = ";")
+
+```
+
+
+KUBER
+
+O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER
+```{r}
+file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/SYKEFRAV_2026-02-22-17-26.csv"
+#file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/DATERT/csv/SYKEFRAV_STATBANK_2026-02-18-11-10.csv"
+syke <- read_delim(file, delim = ";") %>% 
+  separate(AAR, into = c("AAR_start", "AAR_end"), sep = "_", remove = FALSE) %>% 
+  mutate_at(c("GEO", "AAR_start", "AAR_end"), as.integer) %>% 
+  left_join(., stednavn_GEO_BKFL)
+syke_data <- gsub(".csv", "", basename(file))
+
+```
+
+Hdir colors
+```{r}
+hdirpink3 <- "#7C145C"
+hdirpink2 <- "#DBB5ED"
+hdirpink1 <- "#FCF3F9"
+hdiryellow3 <- "#FFBF00"
+hdiryellow2 <- "#FFE187"
+hdiryellow1 <- "#FFF9E6"
+
+hdirblue2b <- "#048eb7"
+hdirblue_f4 <- "#047FA4"
+
+hdirfarge1 <- "#025169"
+hdirfarge2 <- "#0069E8"
+hdirfarge3 <- "#7C145C"
+hdirfarge4 <- "#047FA4"
+hdirfarge5 <- "#C68803"
+hdirfarge6 <- "#38A389"
+hdirfarge7 <- "#6996CE"
+hdirfarge8 <- "#366558"
+hdirfarge9 <- "#BF78DE"
+hdirfarge10 <- "#767676"
+
+colors_kjonn <- c(hdirfarge10, hdirfarge2, hdirfarge3)
+show_col(colors_kjonn, ncol = 3)
+```
+
+https://designsystem.helsedir.no/0410c9e94/p/736ae4-farger
+```{r}
+hdirblue3 <- "#025169"
+hdirblue2 <- "#047FA4"
+hdirblue1 <- "#8CE2FD"
+hdirblue1b <- "#9ce0f5"
+hdirblue1c <- "#83cfe6"
+fhiblue1b <- "#65ADC3"
+hdirgreen3 <- "#366558"
+hdirgreen2 <- "#95DBCA"
+hdirgreen2b <- "#78d1bb"
+hdirgreen_f6 <- "#38A389"
+hdirgreen1b <- "#c5e9df"
+hdirgreen1c <- "#dff7f0"
+hdirgreen1d <- "#cff3e9"
+hdirgreen1 <- "#EBF5F2"
+hdirwhite <- "#FFFFFF"
+
+colors_LFK <- c(hdirblue3, hdirblue2, hdirgreen2)
+```
+
+# Data prep
+
+
+```{r}
+
+map_levels(syke)
+
+```
+
+## Filtering
+```{r}
+
+syke_prep <- syke %>% 
+  filter(ALDER == "20_66",
+         AAR_end >= 2015,
+         ) %>% 
+  mutate(KJONN_text = case_when(KJONN == 1 ~ "Menn",
+                                KJONN == 2 ~ "Kvinner",
+                                KJONN == 0 ~ "Kjønn samlet",
+                                ),
+        )
+
+```
+
+
+```{r}
+syke_plot <- left_join(jointable, syke_prep) %>% 
+  filter(GEO_type %in% c("land", "fylke")) %>% 
+  mutate(prikk = ifelse(is.na(MEIS), 3, NA_real_)) %>% 
+  mutate(label_metadata = syke_data,
+         label_kilde = "Kilde: SSB",
+         ) %>% 
+  mutate(plotid = ifelse(plotid == 3, "03", plotid)) # ensure 4 digit Oslo geo code
+
+map_levels(syke_plot)
+
+```
+
+
+# Linjeplot LFK
+
+## testplot
+
+```{r}
+map_levels(syke_plot)
+```
+
+
+missing
+```{r}
+syke_plot %>% 
+  filter(GEO_type == "fylke") %>% 
+  group_by(KJONN) %>% 
+  count(SPVFLAGG)
+```
+
+```{r}
+min_max <- minmax(syke_plot %>% filter(GEO_type == "fylke"))
+min_max
+```
+
+
+# Linje KJONN
+
+```{r fig.height=5, fig.width=7}
+x_text_size <- 11.5
+y_text_size <- 11.5
+axis_title_size <- 14
+legend_size <- 13.5
+stripsize <- 14
+colwidth <- 0.7
+ymax <- 20 
+
+misstext_kommune <- "Manglende eller utilstrekklig \ntallgrunnlag i kommunen"
+misstext_fylke <- "Kommunetall mangler, fylkestall vises"
+colors_kjonn <- c(hdirfarge10, hdirfarge2, hdirfarge3)
+ylab <- "Andel standardisert (prosent)"
+
+theme_OVP_line <- theme_cowplot() +
+    theme(legend.position = "bottom",
+          legend.title = element_blank(),
+          legend.text = element_text(size = legend_size),
+          legend.margin=margin(t=-6),
+          legend.key.width = unit(1.9, 'cm'),
+          axis.title.x = element_blank(),
+          axis.text.x = element_text(size = x_text_size),
+          axis.text.y = element_text(size = y_text_size),
+          axis.title.y = element_text(size = axis_title_size),
+          strip.background = element_blank(),
+          strip.text = element_text(size = stripsize),
+          line = element_blank(),
+          axis.ticks.y = element_line(color = "grey50"),
+          panel.border = element_rect(fill = NA, color = "grey50"),
+          panel.grid.major = element_line(size = 0.2, color = "grey90"),
+          panel.grid.minor.y = element_line(size = 0.1, color = "grey90"),
+          plot.caption = element_text(hjust=c(0,1), size = c(5,10)),
+          plot.margin = margin(t = 2, r = 5, b = 2, l = 5),
+          panel.background = element_rect(color = "white"), 
+          )
+
+do_lineplot <- function(data, missing_kommunetall = FALSE, missing_plot_fylke = FALSE) {
+  
+  highest_plotorder <- data %>% filter(plotorder == max(plotorder)) %>% pull(Sted)
+
+    p <- data %>% 
+      ggplot(aes(x = AAR_end, y = MEIS,
+                 color = reorder(KJONN_text, KJONN),
+                 )) +
+      geom_line(aes(group = reorder(KJONN_text, KJONN)),
+                size = 1.5) +
+      ggrepel::geom_label_repel(data = data %>% 
+                                  filter(AAR_end == max(AAR_end)),
+                                aes(x = AAR_end, y = MEIS,
+                                    label = paste0(round(MEIS,1),"%")),
+                                size = 4,
+                                nudge_x = 1,
+                                color = "black",
+                                direction = "y",
+                                force = 0.1,
+                                box.padding = 0.1,
+                                max.overlaps = Inf,
+                                min.segment.length = 1,
+                                ) +
+      geom_point(data = data %>% 
+                          filter(GEO %in% c(1508, 1580),
+                                 AAR_end == max(AAR_end)),
+                 aes(x = AAR_end, y = MEIS, color = reorder(KJONN_text, KJONN)),
+                 shape = 15,
+                 size = 1.5,
+                 show.legend = FALSE,
+                 ) +
+      theme_cowplot() +
+      scale_color_manual(values = c(colors_kjonn)) +
+      geom_vline(xintercept = 0) +
+      scale_y_continuous(limits = c(0, ymax),
+                         breaks = seq(0,100,5),
+                         expand = expansion(mult = c(0, 0)),
+                         ) +  
+      scale_x_continuous(limits = c(min_max$min_aar, min_max$max_aar+1.5),
+                         breaks = seq(min_max$min_aar+1, min_max$max_aar, 2),
+                         labels = abs) +
+      coord_cartesian(clip = "off") +
+      theme_OVP_line +
+      facet_wrap(~ reorder(Sted, plotorder)) +
+      #guides(color = FALSE) +
+          labs(y = ylab,
+           caption = c(syke_data, "Kilde: SSB"))
+
+     # If missing values should be visualized, add these layers
+  if (missing_kommunetall) {
+    p <- p +
+       geom_text(data = data %>% filter(Sted == highest_plotorder),
+              aes(label = misstext_kommune,
+                  #group = reorder(Sted, plotorder),
+                  ),
+                 x = (min_max$min_aar+min_max$max_aar+1)/2,
+                 y = ymax-2,
+                 size = 4,
+                 check_overlap = TRUE,
+                 inherit.aes = FALSE)
+  }
+  
+  if (missing_plot_fylke) {
+    p <- p +
+       geom_text(data = data %>% filter(Sted == highest_plotorder),
+              aes(label = misstext_fylke,
+                  #group = reorder(Sted, plotorder),
+                  ),
+                 x = (min_max$min_aar+min_max$max_aar)/2,
+                 y = ymax-2,
+                 size = 4,
+                 check_overlap = TRUE,
+                inherit.aes = FALSE)
+  }
+  
+  return(p)
+  
+  
+}
+
+syke_plot %>% 
+  filter(GEO_type %in% c("land", "fylke"),
+         plotid == "15") %>% 
+  do_lineplot(.)
+
+#ggsave("plots/syke_KJONN_LK.png", height = 5, width = 7, bg = "white")
+
+```
+
+
+# MISSING
+
+No missing at fylke level
+```{r}
+
+missing <- select_prikk(syke_plot)
+
+```
+
+
+# MULTIPLOT
+
+```{r}
+
+dirname <- "Figur4_FYLKE"
+figposnr <- "5"
+
+res_dir <- paste0("plots/", dirname)
+dir.create(res_dir, recursive = TRUE)
+
+# Plot Level 1 - no missing
+plots_1 <- syke_plot %>% 
+  filter(GEO_type %in% c("land", "fylke")) %>% 
+  #filter(!plotid %in% missing) %>%  # Filter plotid with no missing
+  split(.$plotid) %>% 
+  map(~do_lineplot(.x))
+  #map(~do_plot(.x, include_missing = FALSE))
+
+# Plot Level 2 - missing
+# plots_2 <- syke_plot %>%
+#   filter(GEO_type %in% c("land", "kommune"),
+#          plotid %in% missing) %>%  # Filter plotid with no total missing
+#   split(.$plotid) %>%
+#   map(~do_lineplot(.x, missing_kommunetall = TRUE))
+
+# Combine both lists of plots
+all_plots <- c(plots_1)
+
+# Generate file paths using `outdir` and `figposnr`
+paths <- stringr::str_c(names(all_plots), "_", figposnr, "_tema", ".png")
+
+# Save plots
+pwalk(list(paths, all_plots), ~ggsave(filename = .x, plot = .y, 
+                                      height = 5, width = 7, dpi = 300, bg = "white", 
+                                      path = res_dir))
+
+length(plots_1)
+length(all_plots)
+```
+
+
+
+
+# Tall for hele landet
+
+Figur til nettartikkel
+
+```{r fig.height=5, fig.width=6}
+syke_plot %>% 
+  filter(GEO_type %in% c("land"),
+         ) %>% 
+  filter(plotid == "0301") %>% 
+  do_lineplot(.)
+ggsave("../Nettartikkel/Figur4_sykefravær_kjønn.png", height = 5, width = 6, bg = "white", dpi = 150)
+```
+
+Tall til nettartikkel
+```{r}
+
+landstall_nettartikkel <- syke_prep %>% 
+  filter(GEO == 0) %>% 
+  select(AAR_end, KJONN_text, MEIS) %>% 
+  pivot_wider(names_from = KJONN_text, values_from = MEIS)
+
+landstall_nettartikkel
+
+write_delim(landstall_nettartikkel, "Figur4_landstall_nettartikkel.csv", delim = ";")
+
+```
+
+
+

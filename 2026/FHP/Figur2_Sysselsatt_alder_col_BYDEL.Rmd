@@ -1,0 +1,371 @@
+---
+title: "Gjennomføring etter utdanning (proxy for sysselsatte)"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: true
+    toc_depth: 2
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: Hanna Helgeland
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE)
+#options(scipen = 2)
+options(digits = 2)
+options(scipen=999)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Start with clear environment
+rm(list = ls())
+
+# install pacman - a tool for easy installing and loading the other required packages
+if (!require("pacman")) install.packages("pacman")
+
+# use pacman to install - if needed, and load packages
+pacman::p_load(tidyverse, cowplot, Hmisc, ggpubr, scales, ggbeeswarm)
+
+```
+
+FHP Figur 3 i påvente av tall på sysselsatte
+
+Figur 3: 
+Sysselsetting etter kjønn eller utdanningsnivå (ønsker gjerne innspill til om det vil fungere med begge deler)
+-	Bør vi sammenlikne med landet her eller kun internt i kommunen mellom kjønn og/eller utdann?
+
+
+## Functions
+
+local functions:
+  specify_decimal()
+  %notin%
+  select_prikk()
+  map_levels()
+  minmax()
+```{r}
+source("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_scripts/local_functions.R")
+```
+
+
+C:/Users/HANN/OneDrive - Helsedirektoratet/
+O:/Prosjekt/FHP/
+
+
+## Data
+
+GEO
+Jointable
+recent year
+```{r}
+stednavn_GEO_BKFL <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/stednavn_GEO_BKFL_GEO2024.csv", delim = ";")
+
+jointable <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/jointable_multiplot_BYDEL.csv", delim = ";")
+
+```
+
+
+KUBER
+
+```{r}
+file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/SYSSELSATTE_UTDANN_1_2026-02-06-09-17.csv"
+
+syssel <- read_delim(file, delim = ";", locale = locale(encoding = 'ISO-8859-15')) %>% 
+  separate(AAR, into = c("AAR_start", "AAR_end"), sep = "_", remove = FALSE) %>% 
+  mutate_at(c("GEO", "AAR_start", "AAR_end"), as.integer) %>% 
+  left_join(., stednavn_GEO_BKFL)
+
+syssel_data <- gsub(".csv", "", basename(file))
+
+```
+
+Hdir colors
+```{r}
+hdirpink3 <- "#7C145C"
+hdirpink2 <- "#DBB5ED"
+hdirpink1 <- "#FCF3F9"
+hdiryellow3 <- "#FFBF00"
+hdiryellow2 <- "#FFE187"
+hdiryellow1 <- "#FFF9E6"
+
+hdirblue2b <- "#048eb7"
+hdirblue_f4 <- "#047FA4"
+
+hdirfarge1 <- "#025169"
+hdirfarge2 <- "#0069E8"
+hdirfarge3 <- "#7C145C"
+hdirfarge4 <- "#047FA4"
+hdirfarge5 <- "#C68803"
+hdirfarge6 <- "#38A389"
+hdirfarge7 <- "#6996CE"
+hdirfarge8 <- "#366558"
+hdirfarge9 <- "#BF78DE"
+hdirfarge10 <- "#767676"
+
+```
+
+FHI clors
+```{r}
+fhiblue3 <- "#393c61"
+fhiblue2 <- "#0975B5"
+fhiblue2b <- "#0580A7"
+fhiblue1 <- "#2EA1C0"
+fhiblue1b <- "#65ADC3"
+fhigrey <- "#A9B7BF"
+fhigreen <- "#709900"
+fhidarkgreen <- "#4d7e13"
+fhilightgreen <- "#aed267"
+fhilightgreenman <- "#a2c24c"
+fhired <- "#B11643"
+fhicoral <- "#FC5F56"
+fhiyellow <- "#F7B500"
+```
+
+https://designsystem.helsedir.no/0410c9e94/p/736ae4-farger
+```{r}
+hdirblue3 <- "#025169"
+hdirblue2 <- "#047FA4"
+hdirblue1 <- "#8CE2FD"
+hdirblue1b <- "#9ce0f5"
+hdirblue1c <- "#83cfe6"
+fhiblue1b <- "#65ADC3"
+hdirgreen3 <- "#366558"
+hdirgreen2 <- "#95DBCA"
+hdirgreen2b <- "#78d1bb"
+hdirgreen_f6 <- "#38A389"
+hdirgreen1b <- "#c5e9df"
+hdirgreen1c <- "#dff7f0"
+hdirgreen1d <- "#cff3e9"
+hdirgreen1 <- "#EBF5F2"
+hdirwhite <- "#FFFFFF"
+
+colors_LFK <- c(hdirblue3, hdirblue2, hdirgreen2)
+colors_LK <- c(hdirblue3, hdirgreen_f6)
+colors_LKB <- c(hdirblue3, hdirgreen_f6, hdirgreen2)
+
+show_col(c(colors_LKB,
+           colors_LFK,
+           colors_LK), ncol = 3)
+```
+
+
+# Data prep
+
+
+```{r}
+
+map_levels(syssel)
+
+```
+
+## Filtering
+```{r}
+
+syssel_prep <- syssel %>% 
+  filter(UTDANN == 0,
+         KJONN == 0,
+         AAR_end == max(AAR_end),
+         STILLINGSANDEL == "HELDELTID_TOT",
+         ALDER %in% c("20_29", "30_44", "45_54", "55_66"),
+         ) %>% 
+  mutate(ALDER_text = case_when(ALDER == "20_29" ~ "20-29 år",
+                                ALDER == "30_44" ~ "30-44 år",
+                                ALDER == "45_54" ~ "45-54 år",
+                                ALDER == "55_66" ~ "55-66 år",
+                                ),
+        )
+
+```
+
+
+
+
+```{r}
+syssel_plot <- left_join(jointable, syssel_prep) %>% 
+  filter(GEO_type %in% c("land", "bydel", "kommune")) %>% 
+  mutate(prikk = ifelse(is.na(RATE), 3, NA_real_)) %>% 
+  mutate(label_metadata = syssel_data,
+         label_kilde = "Kilde: SSB",
+         ) %>% 
+  mutate(plotid = ifelse(grepl("^301", plotid), paste0("0", plotid), plotid)) # ensure 6 digit Oslo geo code
+
+map_levels(syssel_plot)
+
+```
+
+
+```{r}
+min_max <- minmax(syssel_plot)
+min_max
+```
+
+
+# PLOT
+
+## Søyle facet LK
+```{r}
+show_col(c(colors_LKB,
+         hdirblue3, hdirfarge10, hdirblue2),
+         ncol = 3)
+```
+
+
+
+```{r fig.height=5, fig.width=7}
+
+x_text_size <- 12
+y_text_size <- 11.5
+axis_title_size <- 14
+legend_size <- 12
+stripsize <- 14
+colwidth <- 0.7
+ymax <- 100
+ylab <- "Andel standardisert (prosent)"
+kildelab <- paste0("Kilde: SSB (", min_max$max_aar, ")")
+#colors_LKB <- c(hdirblue3, hdirgreen_f6, hdirgreen2)
+colors_LKB <- c(hdirblue3, fhigrey, hdirblue2)
+#colors_LKB <- c(hdirblue3, hdirfarge10, hdirblue2)
+
+theme_OVP <- theme_cowplot() +
+    theme(legend.position = "none",
+          legend.text = element_text(size = legend_size),
+          legend.margin=margin(t=-6),
+          axis.title.x = element_blank(),
+          axis.text.x = element_text(size = x_text_size,
+                                     angle = 45, hjust = 1,
+                                     ),
+          axis.text.y = element_text(size = y_text_size),
+          axis.title.y = element_text(size = axis_title_size),
+          strip.background = element_blank(),
+          strip.text = element_text(size = stripsize),
+          line = element_blank(),
+          axis.ticks.y = element_line(color = "grey50"),
+          panel.border = element_rect(fill = NA, color = "grey50"),
+          plot.caption = element_text(hjust=c(0,1), size = c(5,9)),
+          plot.margin = margin(t = 2, r = 5, b = 2, l = 5),
+          panel.background = element_rect(color = "white"), 
+          )
+
+misstext <- "Manglende eller anonymiserte tall"
+
+do_plot <- function(data, include_missing = FALSE) {  # default is missing FALSE, no need to speficy
+    
+   highest_plotorder <- data %>% filter(plotorder == max(plotorder)) %>% pull(Sted)
+
+    p <- data %>% 
+    ggplot(aes(y = MEIS, x = reorder(ALDER_text, ALDER),
+              fill = reorder(Sted, plotorder))) +
+    geom_col(width = colwidth,
+             position = position_dodge(width = colwidth)) +
+  geom_text(aes(label = round(MEIS,0)),
+            nudge_y = 4,
+            size = 4) +
+    scale_fill_manual(values = c(colors_LKB)) +
+    scale_x_discrete(expand = expansion(mult = c(0.20, 0.20))) +
+    scale_y_continuous(breaks = seq(0,100,10),
+                       limits = c(0,100), expand = expansion(mult = c(0, 0))) +
+    coord_cartesian(ylim = c(0,100),
+                    #xlim = c(1,3),
+                    clip = "off") +
+  theme_OVP +
+    labs(y = ylab,
+         caption = c(syssel_data, kildelab),
+         fill = "") +
+      # facet_wrap(~reorder(Sted, plotorder)) 
+    facet_grid(~reorder(Sted, plotorder), scales = "free", space = "free")
+  
+   
+   # If missing values should be visualized, add these layers
+  if (include_missing) {
+    p <- p +
+      geom_point(aes(y = prikk,
+                     group = reorder(Sted, plotorder)), 
+                     #group = reorder(Sted, plotorder)), 
+                 color = "black", size = 4.1,
+                 position = position_dodge(width = colwidth),
+                 show.legend = FALSE) +
+       geom_text(data = data %>% filter(Sted == highest_plotorder),
+              aes(label = misstext,
+                     group = reorder(Sted, plotorder)),
+                 x = 2.9,
+                 y = 97,
+                 size = 3.9,
+                 check_overlap = TRUE,
+                 inherit.aes = FALSE) +
+       geom_point(data = data %>% filter(Sted == highest_plotorder),
+              aes(group = reorder(Sted, plotorder)),
+                  x = 1.2, 
+                  y = 96.6,
+                  size = 4,
+                  inherit.aes = FALSE)
+  }
+  
+  return(p)
+}
+
+syssel_plot %>% 
+  filter(plotid == "030101") %>% 
+  do_plot(., include_missing = FALSE)
+ggsave("plots/sysselsatt_bydel.png", height = 5, width = 7, bg = "White")
+
+# syssel_plot %>%
+#   filter(GEO_type %in% c("land", "kommune"),
+#          ) %>%
+#   filter(plotid == 1151) %>%
+#   do_plot(., include_missing = TRUE)
+
+#ggsave("plots/syssel_UTDANN_KJONN_kommune.png", height = 5, width = 7, bg = "White")
+```
+no missing bydel
+```{r}
+select_prikk(syssel_plot)
+```
+
+
+# MULTIPLOT
+
+length(nomiss)+length(kjonnmiss)+length(kjonnmiss3more)+length(kjonntotmiss)
+
+```{r}
+missing <- select_prikk(syssel_plot)
+
+dirname <- "Figur2_BYDEL_gråblå"
+figposnr <- "3"
+
+res_dir <- paste0("plots/", dirname)
+dir.create(res_dir, recursive = TRUE)
+
+# Plot Level 1 - Plot kjønn - no missing
+plots_1 <- syssel_plot %>% 
+  filter(plotid %notin% missing) %>%
+  split(.$plotid) %>% 
+  map(~do_plot(.x, include_missing = FALSE))
+
+# Plot Level 2 - missing
+plots_2 <- syssel_plot %>% 
+  filter(plotid %in% missing) %>%  
+  split(.$plotid) %>% 
+  map(~do_plot(.x, include_missing = TRUE))
+
+# Combine both lists of plots
+#all_plots <- c(plots_5)
+all_plots <- c(plots_1, plots_2)
+
+# Generate file paths using `outdir` and `figposnr`
+paths <- stringr::str_c(names(all_plots), "_", figposnr, "_tema", ".png")
+
+# Save plots
+pwalk(list(paths, all_plots), ~ggsave(filename = .x, plot = .y, 
+                                      height = 5, width = 7, dpi = 200, bg = "white", 
+                                      path = res_dir))
+length(plots_1)
+length(plots_2)
+
+length(plots_1)+length(plots_2)
+
+length(all_plots)
+```
+
+
+

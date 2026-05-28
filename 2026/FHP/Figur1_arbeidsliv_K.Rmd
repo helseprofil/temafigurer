@@ -1,0 +1,398 @@
+---
+title: "R Notebook"
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: true
+    toc_depth: 2
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: Hanna Helgeland
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+options(scipen = 999)
+
+#Start with clear environment
+rm(list = ls())
+
+# install pacman - a tool for easy installing and loading the other required packages
+if (!require("pacman")) install.packages("pacman")
+
+# use pacman to install - if needed, and load packages
+pacman::p_load(tidyverse, cowplot, Hmisc, ggpubr, scales, ggbeeswarm, ggimage)
+
+```
+
+
+Figur 3 (C8verst til hC8yre side tre):
+barn (0-18 C%r), eldre (80 +) og andel i lavinntektshus. (alle aldre). 
+
+
+## Functions
+
+local functions:
+  specify_decimal()
+  %notin%
+  select_prikk()
+  map_levels()
+  minmax()
+  minmax_bycols()
+  minmax_bycolname()
+```{r}
+source("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_scripts/local_functions.R")
+```
+
+## Data
+
+GEO
+Jointable
+recent year
+
+C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data
+```{r}
+stednavn_GEO_BKFL <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/stednavn_GEO_BKFL_GEO2024.csv", 
+                                delim = ";")
+
+jointable <- read_delim("C:/Users/HANN/OneDrive - Helsedirektoratet/R_local/00_data/jointable_multiplot_GEO2024.csv", delim = ";")
+
+```
+
+
+KUBER
+
+```{r}
+#file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/KOMMUNEHELSA/KH2025NESSTAR/syssel_GK_2024-06-17-14-13.csv"
+file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/SYSSELSATTE_UTDANN_1_2026-02-06-09-17.csv"
+syssel <- data.table::fread(file = file)
+syssel_data <- gsub(".csv", "", basename(file))
+
+file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/NEET_UTDANN_2026-02-09-13-34.csv"
+neet <- data.table::fread(file = file)
+neet_data <- gsub(".csv", "", basename(file))
+
+file <- "O:/Prosjekt/FHP/PRODUKSJON/PRODUKTER/KUBER/STATBANK/STATBANK_2026/SYKEFRAV_2026-02-22-17-26.csv"
+syke <- data.table::fread(file = file)
+syke_data <- gsub(".csv", "", basename(file))
+```
+
+```{r}
+data_data <- paste(neet_data,
+                   syssel_data,
+                   syke_data,
+                   sep = "\n")
+```
+
+# Data prep
+
+```{r}
+names(syssel)
+names(neet)
+names(syke)
+```
+
+```{r}
+map_levels(syssel)
+map_levels(neet)
+map_levels(syke)
+
+```
+
+
+```{r}
+data <- rbind(syssel %>% 
+                filter(KJONN == 0,
+                       UTDANN == 0,
+                       STILLINGSANDEL == "HELDELTID_TOT",
+                       ALDER == "20_66") %>% 
+                 select(GEO, AAR, ALDER, MEIS, TELLER, SPVFLAGG) %>% 
+                 mutate(var = "syssel"),
+               neet %>% 
+                filter(KJONN == 0,
+                       UTDANN == 0,
+                       ALDER == "20_66") %>% 
+                 select(GEO, AAR, ALDER, MEIS, TELLER, SPVFLAGG) %>% 
+                 mutate(var = "neet"),
+              syke %>% 
+                filter(KJONN == 0,
+                       ALDER == "20_66") %>% 
+                select(GEO, AAR, ALDER, MEIS, TELLER, SPVFLAGG) %>% 
+                 mutate(var = "syke")
+              ) %>% 
+    separate(AAR, into = c("AAR_start", "AAR_end"), sep = "_", remove = FALSE) %>% 
+    mutate_at(c("GEO", "AAR_start", "AAR_end"), as.integer) %>% 
+    left_join(., stednavn_GEO_BKFL)
+
+```
+
+```{r}
+data %>% 
+  group_by(var) %>% 
+  filter(AAR_end == max(AAR_end)) %>% 
+  count(var, AAR)
+
+data_filt <- data %>% 
+  group_by(var) %>% 
+  filter(AAR_end == max(AAR_end)) %>% 
+  ungroup() %>% 
+  mutate(varorder = case_when(var == "syssel" ~ 1,
+                          var == "neet" ~ 2,
+                          var == "syke" ~ 3,
+                          TRUE ~ 0)) %>% 
+  filter(varorder >= 1)
+
+map_levels(data_filt)
+
+```
+
+x = c(0.12, 0.55, 0.88)
+
+```{r}
+data_plot <- data_filt %>% 
+  right_join(., jointable) %>% 
+  relocate(plotid, .before = GEO) %>% 
+  filter(GEO_type %in% c("fylke", "kommune")) %>%
+  arrange(plotid) %>% 
+  mutate(y_value = case_when(var == "syssel" ~ 0.78,
+                             var == "neet" ~ 0.36,
+                             var == "syke" ~ 0.79,
+                             )) %>% 
+  mutate(x_value = case_when(var == "syssel" ~ 0.325,
+                             var == "neet" ~ 0.54,
+                             var == "syke" ~ 0.74,
+                             )) %>% 
+  mutate(var_plottext = case_when(var == "syke" ~ "Sykefravær",
+                                   var == "neet" ~ "NEET",
+                                   var == "syssel" ~ "sysselsetting")) %>% 
+  mutate(label_text = case_when(
+    var %in% c("syssel", "neet") ~ paste0(number(round(TELLER,0), big.mark = " "), "\n", round(MEIS, 0), "%"),
+    var == "syke" ~ paste0(round(MEIS, 0), "%"),
+    )) %>% 
+  mutate(prikk = ifelse(is.na(MEIS), 3, NA_real_)) %>% 
+  mutate(plotid = ifelse(plotid == 301, "0301", plotid)) # ensure 4 digit Oslo geo code
+
+
+```
+
+```{r}
+data_plot
+```
+
+
+number(3000, big.mark = " ")
+
+```{r fig.height=5, fig.width=7}
+
+# Suppose you want a 0–1 coordinate system
+bg <- data.frame(x = 0.5, y = 0.5, img = "Figur_1_v06_fraværsdager.png")
+
+# Your labels in the same normalized space [0,1]
+df <- data_plot %>%
+  filter(plotid == 3201,
+         GEO_type == "kommune")
+
+ggplot() +
+  geom_image(data = bg, aes(x, y, image = img), size = 1.2, asp = 1) +  # size controls fill
+  geom_text(
+    data = df,
+    aes(x = x_value, y = y_value, label = label_text),
+    color = "black", size = 5, fontface = "bold"
+  ) +
+  coord_cartesian(xlim = c(-0.2, 1.2), ylim = c(0, 1), expand = FALSE, clip = "off") +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "title of the plot")
+
+#ggsave("plots/Figur1_testkommune.png", height = 5, width = 7, bg = "white", dpi = 300)
+
+```
+
+No missing
+```{r}
+missing <- select_prikk(data_plot)
+```
+
+
+# Multiplot
+
+```{r fig.height=5, fig.width=6.5}
+bg <- data.frame(x = 0.5, y = 0.5, img = "Figur_1_v06_fraværsdager.png")
+titlesize <- 17
+textsize  <- 6.5
+
+do_plot <- function(data,
+                    include_missing = FALSE,
+                    img_size = 1.4,       # size for geom_image
+                    title_size = titlesize,
+                    text_size  = textsize,
+                    xlim = c(0.15, 0.85),
+                    ylim = c(0, 1),
+                    clip = "off") {
+  
+  geo_target <- if (include_missing) "fylke" else "kommune"
+
+  plot_data <- data %>%
+    filter(GEO_type == geo_target)
+
+  plottitle <- unique(paste0("Tall for ", plot_data$Sted[1]))
+
+  p <- ggplot() +
+    geom_image(data = bg, aes(x, y, image = img), size = img_size, asp = 1) +
+    geom_text(
+      data = plot_data,
+      aes(x = x_value, y = y_value, label = label_text),
+      color = "black", size = text_size, fontface = "bold"
+    ) +
+    coord_cartesian(xlim = xlim, ylim = ylim, expand = c(0,0), clip = clip) +
+    theme_void() +
+    theme(
+      plot.title  = element_text(size = title_size, hjust = 0.54),
+      plot.margin = margin(0, 0, 0, 0),
+      plot.caption = element_text(hjust=c(0,1), size = c(5,10), color = c("grey50", "black"))
+    ) +
+    labs(title = plottitle,
+         caption = c(data_data, "Kilde: SSB"))
+        
+  return(p)
+}
+
+data_plot %>% 
+  filter(plotid == 4629) %>% 
+  do_plot(include_missing = FALSE)
+ggsave("plots/4629_2_tema.png", height = 5, width = 6.5, bg = "white", dpi = 150)
+
+data_plot %>% 
+  filter(plotid == 3201) %>% 
+  do_plot(include_missing = FALSE)
+ggsave("plots/3201_2_tema.png", height = 5, width = 6.5, bg = "white", dpi = 150)
+
+# data_plot %>% 
+#   filter(plotid == 3201,
+#          var != "syke",
+#          ) %>% 
+#   do_plot(include_missing = TRUE)
+# ggsave("plots/3201_2_tema_Usyk.png", height = 5, width = 6.5, bg = "white", dpi = 150)
+
+```
+
+optimizing
+
+
+missing
+```{r}
+SPVflagg <- select_prikk(data_plot)
+SPVflagg
+```
+
+
+```{r}
+# Figure directory name and figure position
+dirname <- "Figure1"
+figposnr <- "2"
+
+SPVflagg <- select_prikk(data_plot)  # Get plot IDs with missing values
+
+
+# Generate plots without missing values
+plots <- data_plot %>%
+  filter(!plotid %in% SPVflagg) %>%  # Exclude missing-value plots
+  split(.$plotid) %>%
+  map(~do_plot(., include_missing = FALSE))  # Normal plot
+
+# Generate plots with missing values
+plots_prikk <- data_plot %>%
+  filter(plotid %in% SPVflagg) %>%  # Only include missing-value plots
+  split(.$plotid) %>%
+  map(~do_plot(., include_missing = TRUE))  # Include missing-value markers
+
+# Combine both lists of plots
+all_plots <- c(plots, plots_prikk)
+
+# Generate file paths using `outdir` and `figposnr`
+paths <- stringr::str_c(names(all_plots), "_", figposnr, "_tema", ".png")
+
+# Create the output directory based on `outdir`
+res_dir <- paste0("plots/", dirname)
+dir.create(res_dir, recursive = TRUE)
+
+# Save plots
+pwalk(list(paths, all_plots), ~ggsave(filename = .x, plot = .y, 
+                                      height = 5, width = 6.5, dpi = 200, bg = "white", 
+                                      path = res_dir))
+
+length(all_plots)
+```
+
+
+# Landstall til nettartikkel
+
+```{r}
+data_plot_landet <- data_filt %>% 
+  filter(GEO_type %in% c("land")) %>%
+  mutate(plotid = GEO) %>% 
+  mutate(y_value = case_when(var == "syssel" ~ 0.78,
+                             var == "neet" ~ 0.36,
+                             var == "syke" ~ 0.79,
+                             )) %>% 
+  mutate(x_value = case_when(var == "syssel" ~ 0.325,
+                             var == "neet" ~ 0.54,
+                             var == "syke" ~ 0.74,
+                             )) %>% 
+  mutate(var_plottext = case_when(var == "syke" ~ "Sykefravær",
+                                   var == "neet" ~ "NEET",
+                                   var == "syssel" ~ "sysselsetting")) %>% 
+  mutate(label_text = case_when(
+    var %in% c("syssel", "neet") ~ paste0(number(round(TELLER,0), big.mark = " "), "\n", round(MEIS, 0), "%"),
+    var == "syke" ~ paste0(round(MEIS, 0), "%"),
+    )) %>% 
+  mutate(prikk = ifelse(is.na(MEIS), 3, NA_real_)) %>% 
+  mutate(plotid = ifelse(plotid == 301, "0301", plotid)) # ensure 4 digit Oslo geo code
+
+data_plot_landet
+```
+
+## plot
+```{r fig.height=5, fig.width=6.5}
+bg <- data.frame(x = 0.5, y = 0.5, img = "Figur_1_v06_fraværsdager.png")
+titlesize <- 17
+textsize  <- 6.5
+
+do_plot_landet <- function(data,
+                    include_missing = FALSE,
+                    img_size = 1.4,       # size for geom_image
+                    title_size = titlesize,
+                    text_size  = textsize,
+                    xlim = c(0.15, 0.85),
+                    ylim = c(0, 1),
+                    clip = "off") {
+  
+  plottitle <- unique(paste0("Tall for ", data$Sted[1]))
+
+  p <- ggplot() +
+    geom_image(data = bg, aes(x, y, image = img), size = img_size, asp = 1) +
+    geom_text(
+      data = data,
+      aes(x = x_value, y = y_value, label = label_text),
+      color = "black", size = text_size, fontface = "bold"
+    ) +
+    coord_cartesian(xlim = xlim, ylim = ylim, expand = c(0,0), clip = clip) +
+    theme_void() +
+    theme(
+      plot.title  = element_text(size = title_size, hjust = 0.54),
+      plot.margin = margin(0, 0, 0, 0),
+      plot.caption = element_text(hjust=c(0,1), size = c(5,10), color = c("grey50", "black"))
+    ) +
+    labs(title = plottitle,
+         caption = c(data_data, "Kilde: SSB"))
+        
+  return(p)
+}
+
+
+data_plot_landet %>% 
+  filter(plotid == 0) %>% 
+  do_plot_landet(.)
+ggsave("../Nettartikkel/Figur1_arbeidsliv.png", height = 5, width = 6.5, bg = "white", dpi = 150)
+```
+
+
+
